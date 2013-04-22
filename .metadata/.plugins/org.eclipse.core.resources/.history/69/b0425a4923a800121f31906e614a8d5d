@@ -1,0 +1,25 @@
+/*
+ * Copyright (c) <2013>, Amanj Sherwany <http://www.amanj.me>
+ * All rights reserved.
+ * */
+
+package scala.ch.usi.inf.l3.mina.store
+
+
+sealed trait Value {
+  def value: Option[HPEObject];
+}
+
+case object Bottom extends Value {
+  //TODO or should I throw an exception?
+  override def value: Option[HPEObject] = None
+}
+
+case object Top extends Value {
+  //TODO or should I throw an exception?
+  override def value: Option[HPEObject] = None
+}
+
+case class CTValue(override val value: HPEObject) extends Value
+
+case class AbsValue(override val value: HPEObject) extends Value

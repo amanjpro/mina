@@ -1,0 +1,10 @@
+package scala.ch.usi.inf.l3
+
+
+import scala.reflect.runtime.universe._
+
+package object mina {
+	type Method = DefDef
+	type Class = ClassDef
+	type Var = ValDef
+}

@@ -1,0 +1,36 @@
+/*
+ * Copyright (c) <2013>, Amanj Sherwany <http://www.amanj.me>
+ * All rights reserved.
+ * */
+
+package scala.ch.usi.inf.l3.mina.store
+
+import scala.ch.usi.inf.l3.mina._
+
+
+class Environment private(location: Map[Var, Int], store: Map[Int, Value], loc: Int) {
+  def this() {
+    this(Map.empty, Map.empty, -1)
+  }
+
+  def getValue(v: Var): Option[Value] = {
+    location.get(v) match {
+      case None => None
+      case Some(x) => store.get(x)
+    }
+  }
+
+  def setValue(v: Var, value: Value): Environment = {
+    location.get(v) match {
+      case None => 
+        val l = loc + 1
+        val m = location + (v -> l)
+        val s = store + (l -> value)
+        new Environment(m, s, l)
+      case Some(l) =>
+        val s = store + (l -> value)
+        new Environment(location, s, l)
+    }
+  }
+}
+

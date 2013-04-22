@@ -1,0 +1,15 @@
+/*
+ * Copyright (c) <2013>, Amanj Sherwany <http://www.amanj.me>
+ * All rights reserved.
+ * */
+
+package scala.ch.usi.inf.l3.mina.store
+
+sealed trait AST
+
+case class Var(name: String) extends AST
+
+//case class Method(name: String, tpe: Int, )
+
+
+

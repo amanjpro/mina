@@ -1,0 +1,61 @@
+package scala.ch.usi.inf.l3.mina.eval
+
+import scala.tools.nsc.Global
+import scala.tools.nsc.ast.TreeDSL
+import scala.tools.nsc.plugins.Plugin
+import scala.tools.nsc.plugins.PluginComponent
+import scala.tools.nsc.transform.Transform
+import scala.tools.nsc.transform.TypingTransformers
+
+class HPE(val global: Global) extends Plugin {
+  import global._
+
+  val name = "mina"
+  val description = """|This is a partial evaluator plugin based on Hybrid 
+    |Partial Evaluation by W. Cook and A. Shali 
+    |http://www.cs.utexas.edu/~wcook/Civet/"""
+    
+    
+  val components = List[PluginComponent](HPEComponent)
+
+  private object HPEComponent extends PluginComponent
+    with Transform
+    with TypingTransformers
+    with TreeDSL {
+
+    val global: HPE.this.global.type = HPE.this.global
+    val runsAfter = List[String]("parser")
+    override val runsBefore = List[String]("namer")
+    val phaseName = HPE.this.name
+
+    def newTransformer(unit: CompilationUnit) = new HPETransformer(unit)
+
+    class HPETransformer(unit: CompilationUnit)
+      extends TypingTransformer(unit) {
+      import CODE._
+
+      
+      override def transform(tree: Tree): Tree = {
+        var newTree: Tree = tree match {
+          case cd @ ClassDef(mods, className, tparams, impl) => //if(cd.symbol.isClass)=>
+            val newBody = impl.body.flatMap(_ match {
+              case vd @ ValDef(mod, name, tpt, rhs) =>
+                val scalaTypeName = newTermName("scala")
+                val scalaIdent = Ident(scalaTypeName)
+                val predefTermName = newTermName("Predef")
+                val predefSelect = Select(scalaIdent, predefTermName)
+                val printlnSelect = Select(predefSelect, newTermName("println"))
+                val applyPrint = Apply(printlnSelect, List(Literal(Constant("Hello"))))
+                List(applyPrint, vd) // :: Nil
+              case x => List(x) // :: Nil
+            })
+            treeCopy.ClassDef(tree, mods, className, tparams, treeCopy.Template(
+              impl, impl.parents, impl.self, newBody))
+          case _ => tree
+        }
+        super.transform(newTree)
+      }
+
+    }
+  }
+}

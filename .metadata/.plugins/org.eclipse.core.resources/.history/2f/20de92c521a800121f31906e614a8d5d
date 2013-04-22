@@ -1,0 +1,29 @@
+/*
+ * Copyright (c) <2013>, Amanj Sherwany <http://www.amanj.me>
+ * All rights reserved.
+ * */
+
+package scala.ch.usi.inf.l3.mina.store
+
+
+sealed abstract class Value {
+  def value: Option[Any];
+}
+
+case object Bottom extends Value {
+  //TODO or should I throw an exception?
+  override def value = None
+}
+
+case object Top extends Value {
+  //TODO or should I throw an exception?
+  override def value = None
+}
+
+case class CTValue(value: Any) extends Value {
+  override def value = Some(value)
+}
+
+case class AbsValue(value: Any) extends Value {
+  override def value = Some(value)
+}

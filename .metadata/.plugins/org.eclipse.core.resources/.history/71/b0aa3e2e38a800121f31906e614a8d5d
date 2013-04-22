@@ -1,0 +1,11 @@
+/*
+ * Copyright (c) <2013>, Amanj Sherwany <http://www.amanj.me>
+ * All rights reserved.
+ * */
+
+package scala.ch.usi.inf.l3.mina.store
+
+import scala.ch.usi.inf.l3._
+import mina._
+
+class HPEObject(val tpe: Class, val store: Environment)

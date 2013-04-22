@@ -1,0 +1,33 @@
+package scala.ch.usi.inf.l3.mina.eval
+
+import scala.tools.nsc.Global
+import scala.tools.nsc.ast.TreeDSL
+import scala.tools.nsc.plugins.Plugin
+import scala.tools.nsc.plugins.PluginComponent
+import scala.tools.nsc.transform.Transform
+import scala.tools.nsc.transform.TypingTransformers
+
+class HPE(val global: Global) extends Plugin {
+  import global._
+
+  val name = "mina"
+  val description = """|This is a partial evaluator plugin based on Hybrid 
+    |Partial Evaluation by W. Cook and A. Shali 
+    |http://www.cs.utexas.edu/~wcook/Civet/"""
+    
+    
+  val components = List[PluginComponent](HPEComponent)
+
+  private object HPEComponent extends PluginComponent
+    with Transform
+    with TypingTransformers
+    with TreeDSL {
+
+    val global: HPE.this.global.type = HPE.this.global
+    val runsAfter = List[String]("parser")
+    override val runsBefore = List[String]("namer")
+    val phaseName = HPE.this.name
+
+    def newTransformer(unit: CompilationUnit) = new HPETransformer(unit)
+  }
+}
