@@ -1,6 +1,7 @@
 *.class
 *.log
 
+
 # sbt specific
 dist/*
 target/
@@ -11,6 +12,8 @@ project/plugins/project/
 
 # Scala-IDE specific
 .scala_dependencies
+.metadata/*
+.metadata
 
 # Compiled source #
 ###################
