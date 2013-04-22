@@ -1,8 +1,0 @@
-package scala.ch.usi.inf.l3
-
-
-package object mina {
-	type Method = DefDef
-	type Class = ClassDef
-	type Var = ValDef
-}
