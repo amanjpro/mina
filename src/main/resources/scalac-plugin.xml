@@ -1,4 +1,4 @@
 <plugin>
   <name>mina</name>
-  <classname>scala.ch.usi.inf.l3.mina.eval.HPE</classname>
+  <classname>ch.usi.inf.l3.mina.eval.HPE</classname>
 </plugin>

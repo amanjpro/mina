@@ -1,0 +1,53 @@
+#!/bin/sh
+
+# A simple shell script, to automatically build the project and tests it
+
+if [ "$#" -ne 1 -a "$#" -ne 2 ]; then
+  echo "Usage: sudo ./test TEST_FILE [repackage]"
+  complain="[repackage] is optional. If it is set to true"
+  echo ${complain}" then the plugin will be re-packaged."
+  echo "Do not write the .scala extension for the test program"
+  exit 1
+fi
+
+
+# Build the project first
+if [ "$#" -eq 2 ]; then
+  if [ ${2} == "true" ]; then
+    sbt package
+    wait
+  fi
+fi
+
+# The plugin jar file
+mina=target/scala-2.10/mina_2.10-1.0.jar
+
+# Test files are in src/test/scala/ directory
+testFile="src/test/scala/"${1}".scala"
+
+# First compile the test file witht the plugin
+base="bin/test/"
+mkdir ${base}
+testDest=${base}"plugin"
+# Create a destination direcotry if there is not one
+mkdir ${testDest}
+scalac -d ${testDest} -cp ${mina} -Xplugin:${mina} ${testFile}
+wait
+
+# Then compile it without the plugin
+plainDest=${base}"plain"
+# Create a destination direcotry if there is not one
+mkdir ${plainDest}
+scalac -d ${plainDest} -cp ${mina} ${testFile}
+wait
+
+# Run the file once wihtout applying HPE
+scala -cp ${plainDest}:${mina} ${1}
+wait
+
+# Run the same file this time with applying HPE
+scala -cp ${testDest}:${mina} ${1}
+wait
+
+exit 0
+
