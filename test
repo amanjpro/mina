@@ -1,22 +1,56 @@
 #!/bin/sh
 
-# A simple shell script, to automatically build the project and tests it
+# Copyright (c) <2013>, Amanj Sherwany <http://www.amanj.me>
+# All rights reserved.
+# A simple shell script, to automatically build the project and test it
 
-if [ "$#" -ne 1 -a "$#" -ne 2 ]; then
-  echo "Usage: sudo ./test TEST_FILE [repackage]"
-  complain="[repackage] is optional. If it is set to true"
-  echo ${complain}" then the plugin will be re-packaged."
-  echo "Do not write the .scala extension for the test program"
+function help() {
+  usage
+  line1="\nThis is a small shell script, to automatically build the project "
+  line2="(plugin) and test the plugin (against the provided test file (case))"
+  line3="\nCopyright (c) <2013>, Amanj Sherwany <http://www.amanj.me>\n"
+  line4="All rights reserved."
+  echo ${line1}${line2}${line3}${line4}
+}
+function usage() {
+  echo "Usage: sudo [options] ./test TEST_FILE"
+  echo "[options] are optional, and they can be one of the following:"
+  echo "-h | --help to print this help message."
+  echo "-c | --compile to recompile and repackage the plugin."
+  echo "-r | --run to run the test case, after compiling it.\n"
+  echo "Do not write the .scala extension for the test program."
+}
+
+argNum="$#"
+if [ ${argNum} -lt 1 ]; then
+  usage
   exit 1
 fi
 
 
+compile=false
+run=false
+last=${@: -1}
+
+while [[ $1 == -* ]]; do
+    case "$1" in
+      -h|--help) help; exit 0;;
+      -c|--compile) compile=true; shift;;
+      -r|--run) run=true;shift;;
+      --) shift; break;;
+      -*) echo "invalid option: $1" 1>&2; usage; exit 1;;
+    esac
+done
+
+if [[ ${last} == -* ]]; then
+  usage
+  exit 1
+fi
+
 # Build the project first
-if [ "$#" -eq 2 ]; then
-  if [ ${2} == "true" ]; then
-    sbt package
-    wait
-  fi
+if [ ${compile} == true ]; then
+  sbt package
+  wait
 fi
 
 # The plugin jar file
@@ -27,27 +61,29 @@ testFile="src/test/scala/"${1}".scala"
 
 # First compile the test file witht the plugin
 base="bin/test/"
-mkdir ${base}
+
 testDest=${base}"plugin"
 # Create a destination direcotry if there is not one
-mkdir ${testDest}
+mkdir -p ${testDest}
 scalac -d ${testDest} -cp ${mina} -Xplugin:${mina} ${testFile}
 wait
 
 # Then compile it without the plugin
 plainDest=${base}"plain"
 # Create a destination direcotry if there is not one
-mkdir ${plainDest}
+mkdir -p ${plainDest}
 scalac -d ${plainDest} -cp ${mina} ${testFile}
 wait
 
-# Run the file once wihtout applying HPE
-scala -cp ${plainDest}:${mina} ${1}
-wait
+if [ ${run} == true ]; then
+  # Run the file once wihtout applying HPE
+  scala -cp ${plainDest}:${mina} ${1}
+  wait
 
-# Run the same file this time with applying HPE
-scala -cp ${testDest}:${mina} ${1}
-wait
+  # Run the same file this time with applying HPE
+  scala -cp ${testDest}:${mina} ${1}
+  wait
+fi
 
 exit 0
 

@@ -5,4 +5,4 @@
 package ch.usi.inf.l3.mina
 
 
-class HPEException(msg: String) extends Exception(msg)
+class HPEError(msg: String) extends Error(msg)

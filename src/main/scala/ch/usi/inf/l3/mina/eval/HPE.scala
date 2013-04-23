@@ -70,16 +70,16 @@ class HPE(val global: Global) extends Plugin {
        * 
        */
       private def feval(tree: Tree, env: Environment): 
-    	  (Value, Tree, Environment) = {
+    	  (CTValue, Tree, Environment) = {
         tree match {
-          case v: Literal => (AbsValue(HPELiteral(v)), v, env)
+          case v: Literal => (CTValue(HPELiteral(v)), v, env)
           case v @ ValDef(mod, name, tpt, rhs) =>
             val (r, rtree, env2) = feval(rhs, env)
             (r, rtree, env2.addValue(v, r))
           case Assign(lhs, rhs) =>
             val (rhs1, rtree, env1) = feval(rhs, env)
             val env2 = env.addValue(lhs, rhs1)
-            (rhs1, rtree, env2)
+            (rhs1, lhs, env2)
           //TODO what about binary operations?
           case Block(stats, expr) =>
             var env2 = env
@@ -234,8 +234,9 @@ class HPE(val global: Global) extends Plugin {
         }
         (fevaled.reverse, trees.reverse, env)
       }
-      private def fail(msg: String): (Value, Tree, Environment) = {
-        throw new HPEException(msg)
+      
+      private def fail(msg: String): Nothing = {
+        throw new HPEError(msg)
       }
 
       private def typeTree(tree: Tree): Tree = {
