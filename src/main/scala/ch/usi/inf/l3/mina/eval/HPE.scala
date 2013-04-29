@@ -8,13 +8,19 @@ import scala.tools.nsc.transform.Transform
 import scala.tools.nsc.transform.TypingTransformers
 import scala.tools.nsc.ast.parser.TreeBuilder
 import scala.reflect.runtime.universe._
+import scala.language.implicitConversions
 import ch.usi.inf.l3.mina._
 import store._
 
-class HPE(val global: Global) extends Plugin {
+class HPE(val global: Global) extends Plugin 
+						with HPEWrapper 
+						with EnvWrapper
+						with ValueWrapper 
+						with ClassReprWrapper {
   import global._
   import global.Tree
 
+  var env = new Environment
   val name = "mina"
   val description = """|This is a partial evaluator plugin based on Hybrid 
     |Partial Evaluation by W. Cook and A. Shali 
@@ -22,7 +28,7 @@ class HPE(val global: Global) extends Plugin {
 
   val components = List[PluginComponent](HPEComponent)
 
-  private object HPEComponent extends  PluginComponent
+  private object HPEComponent extends PluginComponent
     with Transform
     with TypingTransformers
     with TreeDSL {
@@ -34,8 +40,8 @@ class HPE(val global: Global) extends Plugin {
 
     def newTransformer(unit: CompilationUnit) = new HPETransformer(unit)
 
-    class HPETransformer(unit: CompilationUnit) 
-    	extends TypingTransformer(unit) {
+    class HPETransformer(unit: CompilationUnit)
+      extends TypingTransformer(unit) {
       import CODE._
       private val fevalError: String = """|Blocks marked as CT shall be 
         						|completely known at compilation time."""
@@ -59,7 +65,8 @@ class HPE(val global: Global) extends Plugin {
         //          case _ => tree
         //        }
         //Partially evaluate the program!
-        var newTree = peval(tree, new Environment)._1
+        val (newTree, _, env2) = peval(tree,  env)
+        env = env2
         super.transform(newTree)
       }
 
@@ -69,38 +76,42 @@ class HPE(val global: Global) extends Plugin {
        * scalac -Yshow-trees -Xprint:parser YOURPROGRAM
        * 
        */
-      private def feval(tree: Tree, env: Environment): 
-    	  (CTValue, Tree, Environment) = {
+      private def feval(tree: Tree, env: Environment): (CTValue, Environment) = {
         tree match {
-          case v: Literal => (CTValue(HPELiteral(v)), v, env)
-          case v @ ValDef(mod, name, tpt, rhs) =>
-            val (r, rtree, env2) = feval(rhs, env)
-            (r, rtree, env2.addValue(v, r))
+          case v: Literal => (CTValue(HPELiteral(v, v.tpe)), env)
+          case v: Ident => 
+            val value: CTValue = env.getValue(v.name) match {
+              case x: CTValue => x
+              case _ => fail(fevalError)
+            }
+            (value, env)
+          case v @ ValDef(mods, name, tpt, rhs) =>
+            val (r, env2) = feval(rhs, env)
+            (r, env2.addValue(v.name, r))
           case Assign(lhs, rhs) =>
-            val (rhs1, rtree, env1) = feval(rhs, env)
-            val env2 = env.addValue(lhs, rhs1)
-            (rhs1, lhs, env2)
+            val (rhs1, env1) = feval(rhs, env)
+            val env2 = env.addValue(lhs.symbol.name, rhs1)
+            (rhs1, env2)
           //TODO what about binary operations?
           case Block(stats, expr) =>
             var env2 = env
-            var tail = stats.tail
-            var head = stats.head
-            while (stats != Nil) {
-              val (_, _, envTemp) = feval(head, env2)
+            var tail = stats
+            
+            while (tail != Nil) {
+              val head = tail.head
+              val (_, envTemp) = feval(head, env2)
               env2 = envTemp
-              head = tail.head
               tail = tail.tail
             }
             feval(expr, env2)
           case If(cond, thenp, elsep) =>
-            val (cond1, _, env1) = feval(cond, env)
-            val x = cond1.value.get
-            if (x == Literal(Constant(true)))
-              feval(thenp, env1)
-            else if (x == Literal(Constant(false)))
-              feval(elsep, env1)
-            else
-              fail(fevalError)
+            val (cond1, env1) = feval(cond, env)
+            hpeAny2Tree(cond1.value) match {
+              case Literal(Constant(true)) => feval(thenp, env1)
+              case Literal(Constant(false)) => feval(elsep, env1)
+              case _ => fail(fevalError)
+            }
+              
           //        While loops in Scala are basically nothing but an if-else conditional
           //        Do we need to think about them then? The following is a while-loop tree
           //          LabelDef( // def while$1(): Unit, tree.tpe=Unit
@@ -127,23 +138,19 @@ class HPE(val global: Global) extends Plugin {
           //          )
           //        )
           case apply @ Apply(fun, args) =>
-            methodSymbol(fun) match {
-              /*
-               * FIXME: Flatten is no good here, it does nothing but flattens
-               * the list of lists to a list, but what should I do is to preserve
-               * the list of lists, that is to solve the issues with varargs
-               */
-              case None => fail("""Couldn't find the applied method call 
-                                   |${apply}""")
-              case Some(symbol) =>
-                val (fevaledArgs, argTrees, env1) = fevalArgs(args, env)
-                val mtree = DEF(symbol).vparamss
-                println(mtree)
-                val paramss = symbol.paramss.flatten.map(CODE.DEF(_).vparamss)
-                val params = paramss.flatten
-            }
-            
-            null
+//            val result: CTValue = methodSymbol(fun) match {
+//              case None => fail(s"""Couldn't find the applied method call 
+//                                   |${apply}""")
+//              case Some(symbol) =>
+//                val (fevaledArgs, env1) = fevalArgs(args, env)
+//                val params = DEF(symbol).vparamss.flatten
+//                val paramNames = for(param <- params) yield param.name
+//                val funStore = env.newStore((paramNames, fevaledArgs))
+//                // TODO find a way to find the applied functions!
+//                feval(fun, funStore)._1
+//            }
+            val v = typeTree(Literal(Constant(1)))
+            (CTValue(HPELiteral(v, v.tpe)), env)
           //TODO for while loop you should be able to generate If tree
           /*
            * TODO:
@@ -191,13 +198,39 @@ class HPE(val global: Global) extends Plugin {
 
       private def peval(tree: Tree, env: Environment): (Tree, Value, Environment) = {
         tree match {
+          case clazz @ ClassDef(mods, name, tparams, impl) => 
+            val c = processClass(clazz, env)
+            (c.tree, Top, env)
+          case method @ DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
+            val (rhs1, _, temp) = peval(rhs, env)
+            val newMethod = typeTree(treeCopy.DefDef(method, mods, name, tparams, 
+                vparamss, tpt, rhs1))
+            (newMethod, Top, temp)
+          case v: Literal =>
+            (v, AbsValue(HPELiteral(v, v.tpe)), env)
+          case v: Ident => 
+            val value = env.getValue(v.name)
+            val t: Tree = value match {
+              case AbsValue(_) | CTValue(_) => value.value
+              case _ => v
+            }
+            (t, value, env)
+          case v @ ValDef(mods, name, tpt, rhs) if(!rhs.isEmpty)=>
+            // We won't partially evaluate method parameters and 
+            // uninitialized (val/var)s
+            val (rtree, r, env2) = peval(rhs, env)
+            val treeToCopy = typeTree(treeCopy.ValDef(v, mods, name, tpt, rtree))
+            (treeToCopy, r, env2.addValue(v.name, r))
+          case a @ Assign(lhs, rhs) =>
+            val (rtree, rhs1, env1) = peval(rhs, env)
+            val env2 = env.addValue(lhs.symbol.name, rhs1)
+            (typeTree(treeCopy.Assign(a, lhs, rtree)), rhs1, env2)
           //TODO change this newTermName to TermName when Scala will have it
           case Apply(fun, t) if (fun.symbol.name == newTermName("CT")) =>
-            val (v, r, env2) = feval(t.head, env)
-            (r, v, env2) 
-            //(tree, Top, env)
-          case Apply(i, _) => 
-            println(i.symbol.name)
+            val (v,  env2) = feval(t.head, env)
+            (v.value, v, env2)
+          //(tree, Top, env)
+          case Apply(i, _) =>
             (tree, Top, env)
           case _ => (tree, Top, env)
         }
@@ -218,30 +251,123 @@ class HPE(val global: Global) extends Plugin {
         //        }
       }
       private def fevalArgs(args: List[Tree], store: Environment): 
-    	  	(List[Value], List[Tree], Environment) = {
+    	  (List[Value], Environment) = {
         var fevaled: List[Value] = Nil
-        var trees: List[Tree] = Nil
         var env = store
         var tail = args.tail
         var head = args.head
         while (tail != Nil) {
-          val (arg1, tree1, temp) = feval(head, env)
+          val (arg1, temp) = feval(head, env)
           fevaled = arg1 :: fevaled
-          trees = tree1 :: trees
           env = temp
           head = tail.head
           tail = tail.tail
         }
-        (fevaled.reverse, trees.reverse, env)
+        (fevaled.reverse, env)
       }
-      
+
       private def fail(msg: String): Nothing = {
         throw new HPEError(msg)
       }
 
       private def typeTree(tree: Tree): Tree = {
-        localTyper.typed {tree}
+        localTyper.typed { tree }
       }
+      
+      private implicit def zip2Lists(list: (List[TermName], List[Value])):
+    	  List[(TermName, Value)] = {
+        val vars = list._1
+        val vals = list._2 match {
+          case x if(vars.size > x.size) =>
+            var temp = list._2
+            var temp2 = vars.drop(x.size)
+            while(temp2 != Nil) {
+              temp = temp ++ List(Bottom)
+              temp2 = temp2.tail
+            }
+            temp
+          case x => x
+        }
+        vars zip vals
+      }
+      
+      private def processClass(cdef: ClassDef, env: Environment): ClassRepr = {
+        var clazz = new ClassRepr(cdef.name)
+        var env2 = env
+        def processClassAux(t: Tree): Unit = {
+          t match {
+        	case v @ ValDef(mods, name, tpt, rhs) =>
+        	  val (vprime, _, temp) = peval(v, env)
+        	  env2 = temp
+        	  clazz.addField(name, tree2Field(vprime))
+        	case m @ DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
+        	  val (mprime, _, temp) = peval(m, env)
+        	  env2 = temp
+        	  clazz.addMethod(name, tree2Method(mprime))
+        	case _ =>
+          }
+        }
+        
+        cdef.foreach(processClassAux(_))
+        
+        
+        var cbody = cdef.impl.body
+        var newBody: List[Tree] = Nil
+        while(cbody != Nil) {
+          val head = cbody.head
+          if(clazz.hasMember(head.symbol.name))
+            newBody = clazz.getMemberTree(head.symbol.name) :: newBody
+          else
+            newBody = head :: newBody
+          cbody = cbody.tail
+        }
+        newBody = newBody.reverse
+        val newClazz = typeTree(treeCopy.ClassDef(cdef, cdef.mods, cdef.name, 
+            cdef.tparams, 
+            treeCopy.Template(cdef.impl, cdef.impl.parents, 
+                cdef.impl.self, newBody)))
+        
+        clazz.tree = newClazz
+        clazz
+      }
+      private implicit def hpeAny2Tree(t: Option[HPEAny]): Tree = {
+        t match {
+          case Some(HPELiteral(x: Tree, _)) => x
+          case Some(HPEObject(x: Tree, _, _)) => x
+          case _ => typeTree(treeBuilder.makeBlock(Nil))
+        }
+      }
+      
+      private implicit def hpeAny2Type(t: Option[HPEAny]): Type = {
+        t match {
+          case Some(HPELiteral(_, x: Type)) => x
+          case Some(HPEObject(_, x: Type, _)) => x
+          case _ => null
+        }
+      }
+
+      
+      private implicit def tree2Field(t: Tree): ValDef = {
+        t match {
+          case x: ValDef => x
+          case x => fail(s"""Unexpected val definition ${x}""")
+        }
+      } 
+      
+      private implicit def tree2Tree(t: Global#Tree): Tree = {
+        t match {
+          case x: Tree => x
+          case x => fail(s"""Unexpected tree definition ${x}""")
+        }
+      } 
+      
+      private implicit def tree2Method(t: Tree): DefDef = {
+        t match {
+          case x: DefDef => x
+          case x => fail(s"""Unexpected method definition ${x}""")
+        }
+      } 
+
     }
 
   }

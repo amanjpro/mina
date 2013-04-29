@@ -18,6 +18,7 @@ function usage() {
   echo "-h | --help to print this help message."
   echo "-c | --compile to recompile and repackage the plugin."
   echo "-r | --run to run the test case, after compiling it.\n"
+  echo "-a | --all to compile all test cases, without running them.\n"
   echo "Do not write the .scala extension for the test program."
 }
 
@@ -30,34 +31,50 @@ fi
 
 compile=false
 run=false
-last=${@: -1}
+testAll=false
 
 while [[ $1 == -* ]]; do
     case "$1" in
       -h|--help) help; exit 0;;
       -c|--compile) compile=true; shift;;
       -r|--run) run=true;shift;;
+      -a|--all) testAll=true;shift;;
       --) shift; break;;
       -*) echo "invalid option: $1" 1>&2; usage; exit 1;;
     esac
 done
 
-if [[ ${last} == -* ]]; then
-  usage
-  exit 1
+file=${1}
+
+if [ ${testAll} == false ]; then
+  if [[ ${file} == -* ]]; then
+    usage
+    exit 1
+  fi
+else
+  file="*"
 fi
+
+
 
 # Build the project first
 if [ ${compile} == true ]; then
+  echo "==========================="
+  echo "   Compiling the plugin"
+  echo "==========================="
   sbt package
   wait
 fi
+
+echo "==========================="
+echo "  Compiling the test case"
+echo "==========================="
 
 # The plugin jar file
 mina=target/scala-2.10/mina_2.10-1.0.jar
 
 # Test files are in src/test/scala/ directory
-testFile="src/test/scala/"${1}".scala"
+testFile="src/test/scala/"${file}".scala"
 
 # First compile the test file witht the plugin
 base="bin/test/"
@@ -75,13 +92,16 @@ mkdir -p ${plainDest}
 scalac -d ${plainDest} -cp ${mina} ${testFile}
 wait
 
-if [ ${run} == true ]; then
+if [ ${testAll} == false -a ${run} == true ]; then
+  echo "==========================="
+  echo "   Running the test case"
+  echo "==========================="
   # Run the file once wihtout applying HPE
-  scala -cp ${plainDest}:${mina} ${1}
+  scala -cp ${plainDest}:${mina} ${file}
   wait
 
   # Run the same file this time with applying HPE
-  scala -cp ${testDest}:${mina} ${1}
+  scala -cp ${testDest}:${mina} ${file}
   wait
 fi
 
