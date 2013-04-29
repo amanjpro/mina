@@ -8,7 +8,7 @@ package ch.usi.inf.l3.mina.store
 import ch.usi.inf.l3.mina.eval._
 import ch.usi.inf.l3.mina._
 
-trait HPEEnvironmentWrapper {
+private[mina] trait HPEEnvironmentWrapper {
   self: HPE =>
   import self.global._
 
@@ -111,7 +111,7 @@ trait HPEEnvironmentWrapper {
     }
   }
 
-  private[mina] sealed trait Value {
+  sealed trait Value {
     def value: Option[HPEAny];
   }
 
@@ -133,13 +133,13 @@ trait HPEEnvironmentWrapper {
     override def value: Option[HPEAny] = Some(v)
   }
 
-  private[mina] trait HPEAny {
+  trait HPEAny {
     val tree: Tree;
     val tpe: Type;
   }
-  private[mina] case class HPEObject(val tree: Tree, val tpe: Type,
+  case class HPEObject(val tree: Tree, val tpe: Type,
     val store: Environment) extends HPEAny
 
-  private[mina] case class HPELiteral(override val tree: Tree,
+  case class HPELiteral(override val tree: Tree,
     override val tpe: Type) extends HPEAny
 }

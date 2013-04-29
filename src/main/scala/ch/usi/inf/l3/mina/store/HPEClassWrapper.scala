@@ -10,7 +10,7 @@ import mina._
 import mina.eval._
 
 private[mina] trait HPEClassWrapper {
-  self: HPE =>
+  self: HPE with HPEEnvironmentWrapper =>
   import HPEClassWrapper.this.global._
   
   class ClassRepr(val name: TermName) {
