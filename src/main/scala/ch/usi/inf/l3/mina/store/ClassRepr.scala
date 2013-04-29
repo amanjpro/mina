@@ -9,9 +9,10 @@ import ch.usi.inf.l3._
 import mina._
 import mina.eval._
 
-private[mina] trait ClassReprWrapper {
+private[mina] trait HPEClassWrapper {
   self: HPE =>
-  import self.global._
+  import HPEClassWrapper.this.global._
+  
   class ClassRepr(val name: TermName) {
     private var classTree: Tree = null
     private var methods: Map[TermName, DefDef] = Map.empty

@@ -13,10 +13,8 @@ import ch.usi.inf.l3.mina._
 import store._
 
 class HPE(val global: Global) extends Plugin 
-						with HPEWrapper 
-						with EnvWrapper
-						with ValueWrapper 
-						with ClassReprWrapper {
+						with HPEEnvironmentWrapper 
+						with HPEClassWrapper {
   import global._
   import global.Tree
 
