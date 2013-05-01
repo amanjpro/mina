@@ -12,41 +12,59 @@ import mina.eval._
 private[mina] trait HPEClassWrapper {
   self: HPE with HPEEnvironmentWrapper =>
   import HPEClassWrapper.this.global._
-  
-  class ClassRepr(val name: TermName) {
-    private var classTree: Tree = null
-    private var methods: Map[TermName, DefDef] = Map.empty
-    private var fields: Map[TermName, ValDef] = Map.empty
 
-    def addMethod(n: TermName, method: DefDef): Unit = {
-      methods = methods + (n -> method)
+  class ClassRepr(val symbol: Symbol, private var classTree: ImplDef = null) {
+    
+    def hasMember(sym: Symbol): Boolean = {
+      var flag = false
+      if (hasClassTree) {
+        for (m <- classTree.impl.body if(sym.fullName == m.symbol.fullName)) {
+          flag = true
+        }
+      }
+      flag
     }
 
-    def addField(n: TermName, field: ValDef): Unit = {
-      fields = fields + (n -> field)
-    }
-
-    def hasMember(n: TermName): Boolean = {
-      fields.contains(n) || methods.contains(n)
-    }
-
-    def getMemberTree(n: TermName): Tree = {
-      if (fields.contains(n)) fields(n)
-      else if (methods.contains(n)) methods(n)
+    def getMemberTree(sym: Symbol): Tree = {
+      var flag = true
+      var result: Tree = null
+      if (hasClassTree) {
+        for (m <- classTree.impl.body if(sym.fullName == m.symbol.fullName)) {
+          flag = false
+          result = m
+        }
+      }
+      if(flag)
+        throw new HPEError(s"|No member in class ${symbol} " +
+        		"has the name ${sym}")
       else
-        throw new HPEError(s"""|No member in class ${name} 
-      					     |has the member ${name}""")
+        result
     }
-    def getFieldTree(n: TermName): Option[ValDef] = fields.get(n)
 
-    def getMethodTree(n: TermName): Option[DefDef] = methods.get(n)
+    override def equals(that: Any): Boolean = {
+      that match {
+        case x: ClassRepr => symbol.fullName == x.symbol.fullName
+        case _ => false
+      }
+    }
 
-    def tree_=(clazz: Tree): Unit = classTree = clazz
+    override def hashCode = 71 * 5 + symbol.##
 
-    def tree: Tree = classTree match {
-      case null => throw new HPEError(s"""${classTree} is null""")
+    def tree_=(clazz: ClassDef): Unit = classTree = clazz
+
+    def hasClassTree() = {
+      classTree match {
+        case null => false
+        case _ => true
+      }
+    }
+
+    def tree: ImplDef = classTree match {
+      case null => throw new HPEError(s"""${classTree} is null + ${symbol}""")
       case _ => classTree
     }
+
+    override def toString(): String = symbol.toString
   }
 
   class MethodBank {
@@ -78,7 +96,6 @@ private[mina] trait HPEClassWrapper {
     }
 
     def get(name: String, args: List[Value]): DefDef = {
-      println(args)
       specialized((name, nullify(args)))
     }
 
@@ -138,6 +155,72 @@ private[mina] trait HPEClassWrapper {
       }
     }
 
+  }
+
+  class ClassDigraph {
+    type C = ClassRepr
+    private var index = 0
+    private var nodes = Map.empty[C, Int]
+    private var reversed = Map.empty[Int, C]
+    private var edges = Map.empty[Int, Int]
+
+    def addClass(clazz: C) = {
+      nodes.contains(clazz) match {
+        case false =>
+          nodes = nodes + (clazz -> index)
+          reversed = reversed + (index -> clazz)
+          index += 1
+        case true if (!clazz.hasClassTree) =>
+          val index1 = nodes(clazz)
+          val current = reversed(index1)
+          if (! current.hasClassTree) {
+            nodes = nodes + (clazz -> index1)
+            reversed = reversed + (index1 -> clazz)
+          }
+        case _ =>
+      }
+    }
+
+    def addSubclass(clazz: C, subclass: C) = {
+      val f = getIndex(clazz)
+      val t = getIndex(subclass)
+      edges = edges + (f -> t)
+    }
+
+    def getSubclass(clazz: C): Option[C] = {
+      nodes.get(clazz) match {
+        case Some(index) =>
+          edges.get(index) match {
+            case Some(parent) => reversed.get(parent)
+            case None => None
+          }
+        case None => None
+      }
+    }
+
+    def getClassRepr(symbol: Symbol): Option[ClassRepr] = {
+      val temp = new ClassRepr(symbol)
+      nodes.get(temp) match {
+        case None => None
+        case Some(index) =>
+          val clazz = reversed(index)
+          clazz.hasClassTree match {
+            case true => Some(clazz)
+            case _ => None
+          }
+
+      }
+    }
+
+    private def getIndex(node: C): Int = {
+      nodes.contains(node) match {
+        case false =>
+          addClass(node)
+          nodes(node)
+        case true =>
+          nodes(node)
+      }
+    }
   }
 
 }

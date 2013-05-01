@@ -8,10 +8,12 @@ package ch.usi.inf.l3.mina.store
 import ch.usi.inf.l3.mina.eval._
 import ch.usi.inf.l3.mina._
 
-private[mina] trait HPEEnvironmentWrapper {
+trait HPEEnvironmentWrapper {
   self: HPE =>
   import self.global._
 
+  // ---------------------- Environment ---------------------------------------
+  
   class Environment private (private val location: Map[TermName, Int],
     private val store: Map[Int, Value],
     private val loc: Int) {
@@ -109,8 +111,11 @@ private[mina] trait HPEEnvironmentWrapper {
         case _ => false
       }
     }
+    
+    override def toString: String = location.toString + "\n" + store.toString
   }
 
+  // ---------------------- Value -----------------------------------------
   sealed trait Value {
     def value: Option[HPEAny];
   }
@@ -133,6 +138,8 @@ private[mina] trait HPEEnvironmentWrapper {
     override def value: Option[HPEAny] = Some(v)
   }
 
+  // ---------------------- Simulating Runtime Object  -----------------------
+  
   trait HPEAny {
     val tree: Tree;
     val tpe: Type;
