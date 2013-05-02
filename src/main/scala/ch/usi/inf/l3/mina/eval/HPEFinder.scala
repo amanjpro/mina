@@ -28,10 +28,10 @@ class HPEFinder(val hpe: HPE) extends PluginComponent {
       for (tree <- unit.body) {
         tree match {
           case impl : ImplDef =>
-            val repr = new ClassRepr(impl.symbol, impl)
+            val repr = new ClassRepr(impl.symbol.tpe, impl)
             digraph.addClass(repr)
             for (p <- impl.impl.parents) {
-              val parent = new ClassRepr(p.symbol)
+              val parent = new ClassRepr(p.symbol.tpe)
               digraph.addClass(parent)
               digraph.addSubclass(parent, repr)
             }  

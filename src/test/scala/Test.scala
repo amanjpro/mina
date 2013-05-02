@@ -1,9 +1,9 @@
 import ch.usi.inf.l3.mina._
 
 object Test{
-  def b(v: Int) = v
+  def b(v: Int) = v + 2
   def k = {
-    val c = 1
+    val c = CT(~1)
   }
   def main(str: Array[String]) {
     val c = CT(b(1))

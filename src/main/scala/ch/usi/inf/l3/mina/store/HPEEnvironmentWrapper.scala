@@ -147,6 +147,6 @@ trait HPEEnvironmentWrapper {
   case class HPEObject(val tree: Tree, val tpe: Type,
     val store: Environment) extends HPEAny
 
-  case class HPELiteral(override val tree: Tree,
-    override val tpe: Type) extends HPEAny
+  case class HPELiteral(override val tree: Literal,
+    override val tpe: Type) extends HPEAny 
 }

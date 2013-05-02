@@ -33,28 +33,26 @@ run=false
 testAll=false
 helpf=false
 
-while getopts ":h:c:r:a" OPTION;
+while getopts ":h:cr:a" OPTION;
 do
   case $OPTION in
     h) 
-      usage; 
+      usage;
       helpf=true;
-      >&2
       ;;
     c) 
-      compile=true; 
-      >&2
+      compile=true;
       ;;
     r) 
       run=true;
-      >&2
       ;;
     a)
       testAll=true;
-      >&2
       ;;
-    \?) echo "invalid option: $OPTION" 1>&2; usage;
-  exit 1;;
+    \?) 
+      echo "invalid option: $OPTION" 1>&2; 
+      usage;
+      exit 1;;
   esac
 done
 

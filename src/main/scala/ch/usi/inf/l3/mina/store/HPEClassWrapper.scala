@@ -13,42 +13,44 @@ private[mina] trait HPEClassWrapper {
   self: HPE with HPEEnvironmentWrapper =>
   import HPEClassWrapper.this.global._
 
-  class ClassRepr(val symbol: Symbol, private var classTree: ImplDef = null) {
+  class ClassRepr(val tpe: Type, private var classTree: ImplDef = null) {
     
-    def hasMember(sym: Symbol): Boolean = {
+    def hasMember(name: TermName, t: Type): Boolean = {
       var flag = false
       if (hasClassTree) {
-        for (m <- classTree.impl.body if(sym.fullName == m.symbol.fullName)) {
+        for (m <- classTree.impl.body 
+            if(name == m.symbol.name && t == m.symbol.tpe)) {
           flag = true
         }
       }
       flag
     }
 
-    def getMemberTree(sym: Symbol): Tree = {
+    def getMemberTree(name: TermName, t: Type): Tree = {
       var flag = true
       var result: Tree = null
       if (hasClassTree) {
-        for (m <- classTree.impl.body if(sym.fullName == m.symbol.fullName)) {
+        for (m <- classTree.impl.body 
+            if(name == m.symbol.name && t == m.symbol.tpe)) {
           flag = false
           result = m
         }
       }
       if(flag)
-        throw new HPEError(s"|No member in class ${symbol} " +
-        		"has the name ${sym}")
+        throw new HPEError(s"No member in class ${tpe} " +
+        		s"has the name ${name} with the type ${t}")
       else
         result
     }
 
     override def equals(that: Any): Boolean = {
       that match {
-        case x: ClassRepr => symbol.fullName == x.symbol.fullName
+        case x: ClassRepr => tpe == x.tpe
         case _ => false
       }
     }
 
-    override def hashCode = 71 * 5 + symbol.##
+    override def hashCode = 71 * 5 + tpe.##
 
     def tree_=(clazz: ClassDef): Unit = classTree = clazz
 
@@ -60,11 +62,11 @@ private[mina] trait HPEClassWrapper {
     }
 
     def tree: ImplDef = classTree match {
-      case null => throw new HPEError(s"""${classTree} is null + ${symbol}""")
+      case null => throw new HPEError(s"""${classTree} is null + ${tpe}""")
       case _ => classTree
     }
 
-    override def toString(): String = symbol.toString
+    override def toString(): String = tpe.toString
   }
 
   class MethodBank {
@@ -198,8 +200,8 @@ private[mina] trait HPEClassWrapper {
       }
     }
 
-    def getClassRepr(symbol: Symbol): Option[ClassRepr] = {
-      val temp = new ClassRepr(symbol)
+    def getClassRepr(tpe: Type): Option[ClassRepr] = {
+      val temp = new ClassRepr(tpe)
       nodes.get(temp) match {
         case None => None
         case Some(index) =>

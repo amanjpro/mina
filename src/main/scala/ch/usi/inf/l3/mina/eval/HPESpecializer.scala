@@ -33,7 +33,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
   class HPETransformer(unit: CompilationUnit)
     extends TypingTransformer(unit) {
 
-//    import CODE._
+    //    import CODE._
     override def transform(tree: Tree): Tree = {
       //        var newTree: Tree = tree match {
       //          case cd @ ClassDef(mods, className, tparams, impl) => //if(cd.symbol.isClass)=>
@@ -61,8 +61,8 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
     def typeTree(tree: Tree): Tree = {
       localTyper.typed { tree }
     }
-    private val fevalError: String = "Blocks marked as CT shall be completely "+ 
-        							"known and available at compilation time."
+    private val fevalError: String = "Blocks marked as CT shall be completely " +
+      "known and available at compilation time."
 
     /*
      * In order to know about a tree, write it in Scala and run the scalac
@@ -76,7 +76,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         case v: Ident =>
           val value: CTValue = env.getValue(v.name) match {
             case x: CTValue => x
-            case _ => fail(fevalError + "  " +  v)
+            case _ => fail(fevalError + "  " + v)
           }
           (value, env)
         case v @ ValDef(mods, name, tpt, rhs) =>
@@ -86,7 +86,6 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           val (rhs1, env1) = feval(rhs, env)
           val env2 = env.addValue(lhs.symbol.name, rhs1)
           (rhs1, env2)
-        //TODO what about binary operations?
         case Block(stats, expr) =>
           var env2 = env
           var tail = stats
@@ -105,7 +104,6 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
             case Literal(Constant(false)) => feval(elsep, env1)
             case _ => fail(fevalError)
           }
-
         //        While loops in Scala are basically nothing but an if-else conditional
         //        Do we need to think about them then? The following is a while-loop tree
         //          LabelDef( // def while$1(): Unit, tree.tpe=Unit
@@ -131,32 +129,59 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         //            ()
         //          )
         //        )
+        // Unary operations
+        case select @ Select(qual, name) if (isUnary(select)) =>
+          val (r1, env1) =  feval(qual, env)
+
+          
+          val methodName = name
+          doUop(methodName, r1, env1)
+        // Binary operations
+        case apply @ Apply(fun @ Select(r, l), args) if (isBinary(apply)) =>
+          val arg1 = apply.args.head
+          val (r1, env1) =  feval(r, env)
+          val (arg11, env2) = feval(arg1, env1)
+
+          val method = fun.symbol
+          val methodName = method.name
+          doBop(methodName, r1, arg11, env2)
+
+        //        case apply @ Apply(fun, args) 
+        //        	if(fun.symbol.owner.fullName == "class Int"
+        //        	  && fun.symbol.fullName == "+") =>
+        //          val method = fun.symbol
+        //          val (fevaledArgs, env1) = fevalArgs(args, env)
+        //          val v = fevaledArgs match {
+        //            case x :: Nil => 
+        //            case _ => fail(fevalError)
+        //          }
+        //          (v, env1)
         case apply @ Apply(fun, args) =>
-          val reciever = fun.symbol.owner
+          val reciever = fun.symbol.owner.tpe
           digraph.getClassRepr(reciever) match {
             case Some(clazz) =>
               val method = fun.symbol
-              val methodTree = tree2Method(clazz.getMemberTree(method))
+              val methodTree = tree2Method(clazz.getMemberTree(method.name, method.tpe))
               val (fevaledArgs, env1) = fevalArgs(args, env)
               val params = methodTree.vparamss.flatten.map(_.name)
               val funStore = env.newStore((params, fevaledArgs))
               val (v, _) = feval(methodTree.rhs, funStore)
               (v, env1)
-            case None => 
+            case None =>
               fail(fevalError + fun + "   " + reciever)
           }
-          //            val result: CTValue = methodSymbol(fun) match {
-          //              case None => fail(s"""Couldn't find the applied method call 
-          //                                   |${apply}""")
-          //              case Some(symbol) =>
-          //                val (fevaledArgs, env1) = fevalArgs(args, env)
-          //                val params = DEF(symbol).vparamss.flatten
-          //                val paramNames = for(param <- params) yield param.name
-          //                val funStore = env.newStore((paramNames, fevaledArgs))
-          //                // TODO find a way to find the applied functions!
-          //                feval(fun, funStore)._1
-          //            }
-          
+        //            val result: CTValue = methodSymbol(fun) match {
+        //              case None => fail(s"""Couldn't find the applied method call 
+        //                                   |${apply}""")
+        //              case Some(symbol) =>
+        //                val (fevaledArgs, env1) = fevalArgs(args, env)
+        //                val params = DEF(symbol).vparamss.flatten
+        //                val paramNames = for(param <- params) yield param.name
+        //                val funStore = env.newStore((paramNames, fevaledArgs))
+        //                // TODO find a way to find the applied functions!
+        //                feval(fun, funStore)._1
+        //            }
+
         //TODO for while loop you should be able to generate If tree
         /*
            * TODO:
@@ -205,7 +230,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
     def peval(tree: Tree, env: Environment): (Tree, Value, Environment) = {
       tree match {
         case clazz @ ClassDef(mods, name, tparams, impl) =>
-//          val c = processClass(clazz, env)
+          //          val c = processClass(clazz, env)
           (clazz, Top, env)
         case method @ DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
           val (rhs1, _, temp) = peval(rhs, env)
@@ -279,44 +304,44 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       list._1 zip list._2
     }
 
-//    private def processClass(cdef: ClassDef, env: Environment): ClassRepr = {
-//      var clazz = new ClassRepr(cdef.symbol)
-//      var env2 = env
-//      def processClassAux(t: Tree): Unit = {
-//        t match {
-//          case v @ ValDef(mods, name, tpt, rhs) =>
-//            val (vprime, _, temp) = peval(v, env)
-//            env2 = temp
-//            clazz.addField(name, tree2Field(vprime))
-//          case m @ DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
-//            val (mprime, _, temp) = peval(m, env)
-//            env2 = temp
-//            clazz.addMethod(name, tree2Method(mprime))
-//          case _ =>
-//        }
-//      }
-//
-//      cdef.foreach(processClassAux(_))
-//
-//      var cbody = cdef.impl.body
-//      var newBody: List[Tree] = Nil
-//      while (cbody != Nil) {
-//        val head = cbody.head
-//        if (clazz.hasMember(head.symbol.name))
-//          newBody = clazz.getMemberTree(head.symbol.name) :: newBody
-//        else
-//          newBody = head :: newBody
-//        cbody = cbody.tail
-//      }
-//      newBody = newBody.reverse
-//      val newClazz = typeTree(treeCopy.ClassDef(cdef, cdef.mods, cdef.name,
-//        cdef.tparams,
-//        treeCopy.Template(cdef.impl, cdef.impl.parents,
-//          cdef.impl.self, newBody)))
-//
-//      clazz.tree = tree2Class(newClazz)
-//      clazz
-//    }
+    //    private def processClass(cdef: ClassDef, env: Environment): ClassRepr = {
+    //      var clazz = new ClassRepr(cdef.symbol)
+    //      var env2 = env
+    //      def processClassAux(t: Tree): Unit = {
+    //        t match {
+    //          case v @ ValDef(mods, name, tpt, rhs) =>
+    //            val (vprime, _, temp) = peval(v, env)
+    //            env2 = temp
+    //            clazz.addField(name, tree2Field(vprime))
+    //          case m @ DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
+    //            val (mprime, _, temp) = peval(m, env)
+    //            env2 = temp
+    //            clazz.addMethod(name, tree2Method(mprime))
+    //          case _ =>
+    //        }
+    //      }
+    //
+    //      cdef.foreach(processClassAux(_))
+    //
+    //      var cbody = cdef.impl.body
+    //      var newBody: List[Tree] = Nil
+    //      while (cbody != Nil) {
+    //        val head = cbody.head
+    //        if (clazz.hasMember(head.symbol.name))
+    //          newBody = clazz.getMemberTree(head.symbol.name) :: newBody
+    //        else
+    //          newBody = head :: newBody
+    //        cbody = cbody.tail
+    //      }
+    //      newBody = newBody.reverse
+    //      val newClazz = typeTree(treeCopy.ClassDef(cdef, cdef.mods, cdef.name,
+    //        cdef.tparams,
+    //        treeCopy.Template(cdef.impl, cdef.impl.parents,
+    //          cdef.impl.self, newBody)))
+    //
+    //      clazz.tree = tree2Class(newClazz)
+    //      clazz
+    //    }
     private implicit def hpeAny2Tree(t: Option[HPEAny]): Tree = {
       t match {
         case Some(HPELiteral(x: Tree, _)) => x
@@ -330,6 +355,13 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         case Some(HPELiteral(_, x: Type)) => x
         case Some(HPEObject(_, x: Type, _)) => x
         case _ => null
+      }
+    }
+
+    private implicit def tree2Literal(t: Tree): Literal = {
+      t match {
+        case x: Literal => x
+        case _ => fail(s"${t} is not a Literal")
       }
     }
 
@@ -354,6 +386,406 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       }
     }
 
+    private def isUnary(select: Select): Boolean = {
+      val rcvr = select.symbol.owner.tpe
+      val c = isAnyVal(rcvr)
+      val methodName = select.name
+      if (c && isUop(methodName)) {
+        true
+      } else false
+    }
+    
+    private def isBinary(apply: Apply): Boolean = {
+      isBinary(apply, apply.args.size == 1, isBop)
+    }
+    private def isBinary(apply: Apply, check: Boolean,
+        f: TermName => Boolean ): Boolean = {
+      val args = apply.args
+      val fun = apply.fun
+      val rcvr = fun.symbol.owner.tpe
+      val c = isAnyVal(rcvr)
+      val method = fun.symbol
+      val methodName = method.name
+      if (c && check && f(methodName)) {
+        true
+      } else false
+    }
+
+    private def isAnyVal(tpe: Type) = {
+      if (tpe <:< definitions.BooleanClass.tpe ||
+        tpe <:< definitions.ByteClass.tpe ||
+        tpe <:< definitions.ShortClass.tpe ||
+        tpe <:< definitions.IntClass.tpe ||
+        tpe <:< definitions.LongClass.tpe ||
+        tpe <:< definitions.DoubleClass.tpe ||
+        tpe <:< definitions.FloatClass.tpe ||
+        tpe <:< definitions.CharClass.tpe ||
+        tpe <:< definitions.StringClass.tpe) true
+      else false
+    }
+    
+    private def isUop(name: TermName): Boolean = {
+      name match {
+        case nme.UNARY_~ | nme.UNARY_+ | nme.UNARY_- | nme.UNARY_! => true
+        case _ => false
+      }
+    }
+    
+    private def isBop(name: TermName): Boolean = {
+      name match {
+        case nme.OR | nme.XOR | nme.AND | nme.EQ | nme.NE | nme.ADD |
+          nme.SUB | nme.MUL | nme.DIV | nme.MOD | nme.LSL | nme.LSR |
+          nme.ASR | nme.LT | nme.LE | nme.GE | nme.GT | nme.ZOR |
+          nme.ZAND | nme.MINUS | nme.PLUS => true
+        case _ => false
+      }
+    }
+    
+    private def toVal(lit: Literal): Any = {
+      val v = lit.value
+      if(lit.tpe <:< definitions.BooleanClass.tpe) v.booleanValue
+      else if(lit.tpe <:< definitions.ByteClass.tpe) v.byteValue
+      else if(lit.tpe <:< definitions.ShortClass.tpe) v.shortValue
+      else if(lit.tpe <:< definitions.IntClass.tpe) v.intValue
+      else if(lit.tpe <:< definitions.LongClass.tpe) v.longValue
+      else if(lit.tpe <:< definitions.FloatClass.tpe) v.floatValue
+      else if(lit.tpe <:< definitions.DoubleClass.tpe) v.doubleValue
+      else if(lit.tpe <:< definitions.CharClass.tpe) v.charValue
+      else if(lit.tpe <:< definitions.StringClass.tpe) v.stringValue
+      else fail(s"${lit.tpe} is not a builtin value class")
+    }
+
+    private def doUop(methodName: TermName, v: CTValue, env: Environment):
+    	(CTValue, Environment) = {
+      v.value match {
+        case Some(HPELiteral(x, _)) =>
+          val x1 = toVal(x)
+          val lit = doUop(x1, methodName)
+          val tlit = typeTree(lit)
+          val r = CTValue(HPELiteral(tlit, tlit.tpe))
+          (r, env)
+        case _ => fail(fevalError)
+      }
+    }
+    private def doBop(methodName: TermName, v1: CTValue,
+      v2: CTValue, env: Environment): (CTValue, Environment) = {
+      (v1.value, v2.value) match {
+        case (Some(HPELiteral(x, _)), Some(HPELiteral(y, _))) =>
+          //println(x.intValu + "   " + y.value.)
+          val x1 = toVal(x)
+          val y1 = toVal(y)
+          val lit = doBop(x1, y1, methodName)
+          val tlit = typeTree(lit)
+          val r = CTValue(HPELiteral(tlit, tlit.tpe))
+          (r, env)
+        case _ => fail(fevalError)
+      }
+    }
+    
+    private def doUop(x: Boolean, name: TermName): Literal = {
+      name match {
+        case nme.UNARY_! => Literal(Constant(x.unary_!))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    
+    private def doUop(x: Byte, name: TermName): Literal = {
+      name match {
+        case nme.UNARY_~ => Literal(Constant(x.unary_~))
+        case nme.UNARY_+ => Literal(Constant(x.unary_+))
+        case nme.UNARY_- => Literal(Constant(x.unary_-))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    
+    private def doUop(x: Short, name: TermName): Literal = {
+      name match {
+        case nme.UNARY_~ => Literal(Constant(x.unary_~))
+        case nme.UNARY_+ => Literal(Constant(x.unary_+))
+        case nme.UNARY_- => Literal(Constant(x.unary_-))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    
+    private def doUop(x: Int, name: TermName): Literal = {
+      name match {
+        case nme.UNARY_~ => Literal(Constant(x.unary_~))
+        case nme.UNARY_+ => Literal(Constant(x.unary_+))
+        case nme.UNARY_- => Literal(Constant(x.unary_-))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    
+    private def doUop(x: Long, name: TermName): Literal = {
+      name match {
+        case nme.UNARY_~ => Literal(Constant(x.unary_~))
+        case nme.UNARY_+ => Literal(Constant(x.unary_+))
+        case nme.UNARY_- => Literal(Constant(x.unary_-))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    
+    private def doUop(x: Float, name: TermName): Literal = {
+      name match {
+        case nme.UNARY_+ => Literal(Constant(x.unary_+))
+        case nme.UNARY_- => Literal(Constant(x.unary_-))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    
+    private def doUop(x: Double, name: TermName): Literal = {
+      name match {
+        case nme.UNARY_+ => Literal(Constant(x.unary_+))
+        case nme.UNARY_- => Literal(Constant(x.unary_-))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    
+    private def doUop(x: Char, name: TermName): Literal = {
+      name match {
+        case nme.UNARY_~ => Literal(Constant(x.unary_~))
+        case nme.UNARY_+ => Literal(Constant(x.unary_+))
+        case nme.UNARY_- => Literal(Constant(x.unary_-))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    
+     private def doUop(v: Any, name: TermName): Literal = {
+      v match {
+        case x: Boolean => doUop(x, name)
+        case x: Byte => doUop(x, name)
+        case x: Short => doUop(x, name)
+        case x: Int => doUop(x, name)
+        case x: Long => doUop(x, name)
+        case x: Float => doUop(x, name)
+        case x: Double => doUop(x, name)
+        case x: Char => doUop(x, name)
+        case _ =>
+          fail(s"${name} is not a binary operation of " +
+          		"${fst.getClass} and ${snd.getClass}")
+      }
+    }
+    
+    private def doBop(fst: Boolean, snd: Boolean, name: TermName): Literal = {
+      name match {
+        case nme.OR => Literal(Constant(fst | snd))
+        case nme.XOR => Literal(Constant(fst ^ snd))
+        case nme.AND => Literal(Constant(fst & snd))
+        case nme.EQ => Literal(Constant(fst == snd))
+        case nme.NE => Literal(Constant(fst != snd))
+        case nme.LT => Literal(Constant(fst < snd))
+        case nme.LE => Literal(Constant(fst <= snd))
+        case nme.GE => Literal(Constant(fst > snd))
+        case nme.GT => Literal(Constant(fst >= snd))
+        case nme.ZOR => Literal(Constant(fst || snd))
+        case nme.ZAND => Literal(Constant(fst && snd))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    private def doBop(fst: String, snd: String, name: TermName): Literal = {
+      name match {
+        case nme.EQ => Literal(Constant(fst == snd))
+        case nme.NE => Literal(Constant(fst != snd))
+        case nme.ADD | nme.PLUS => Literal(Constant(fst + snd))
+        case nme.LT => Literal(Constant(fst < snd))
+        case nme.LE => Literal(Constant(fst <= snd))
+        case nme.GE => Literal(Constant(fst > snd))
+        case nme.GT => Literal(Constant(fst >= snd))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    private def doBop(fst: Float, snd: Float, name: TermName): Literal = {
+      name match {
+        case nme.EQ => Literal(Constant(fst == snd))
+        case nme.NE => Literal(Constant(fst != snd))
+        case nme.ADD | nme.PLUS => Literal(Constant(fst + snd))
+        case nme.SUB | nme.MINUS => Literal(Constant(fst - snd))
+        case nme.MUL => Literal(Constant(fst * snd))
+        case nme.DIV => Literal(Constant(fst / snd))
+        case nme.MOD => Literal(Constant(fst % snd))
+        case nme.LT => Literal(Constant(fst < snd))
+        case nme.LE => Literal(Constant(fst <= snd))
+        case nme.GE => Literal(Constant(fst > snd))
+        case nme.GT => Literal(Constant(fst >= snd))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    private def doBop(fst: Double, snd: Double, name: TermName): Literal = {
+      name match {
+        case nme.EQ => Literal(Constant(fst == snd))
+        case nme.NE => Literal(Constant(fst != snd))
+        case nme.ADD | nme.PLUS => Literal(Constant(fst + snd))
+        case nme.SUB | nme.MINUS => Literal(Constant(fst - snd))
+        case nme.MUL => Literal(Constant(fst * snd))
+        case nme.DIV => Literal(Constant(fst / snd))
+        case nme.MOD => Literal(Constant(fst % snd))
+        case nme.LT => Literal(Constant(fst < snd))
+        case nme.LE => Literal(Constant(fst <= snd))
+        case nme.GE => Literal(Constant(fst > snd))
+        case nme.GT => Literal(Constant(fst >= snd))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    private def doBop(fst: Byte, snd: Byte, name: TermName): Literal = {
+      name match {
+        case nme.OR => Literal(Constant(fst | snd))
+        case nme.XOR => Literal(Constant(fst ^ snd))
+        case nme.AND => Literal(Constant(fst & snd))
+        case nme.EQ => Literal(Constant(fst == snd))
+        case nme.NE => Literal(Constant(fst != snd))
+        case nme.ADD | nme.PLUS => Literal(Constant(fst + snd))
+        case nme.SUB | nme.MINUS => Literal(Constant(fst - snd))
+        case nme.MUL => Literal(Constant(fst * snd))
+        case nme.DIV => Literal(Constant(fst / snd))
+        case nme.MOD => Literal(Constant(fst % snd))
+        case nme.LSL => Literal(Constant(fst << snd))
+        case nme.LSR => Literal(Constant(fst >>> snd))
+        case nme.ASR => Literal(Constant(fst >> snd))
+        case nme.LT => Literal(Constant(fst < snd))
+        case nme.LE => Literal(Constant(fst <= snd))
+        case nme.GE => Literal(Constant(fst > snd))
+        case nme.GT => Literal(Constant(fst >= snd))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    private def doBop(fst: Short, snd: Short, name: TermName): Literal = {
+      name match {
+        case nme.OR => Literal(Constant(fst | snd))
+        case nme.XOR => Literal(Constant(fst ^ snd))
+        case nme.AND => Literal(Constant(fst & snd))
+        case nme.EQ => Literal(Constant(fst == snd))
+        case nme.NE => Literal(Constant(fst != snd))
+        case nme.ADD | nme.PLUS => Literal(Constant(fst + snd))
+        case nme.SUB | nme.MINUS => Literal(Constant(fst - snd))
+        case nme.MUL => Literal(Constant(fst * snd))
+        case nme.DIV => Literal(Constant(fst / snd))
+        case nme.MOD => Literal(Constant(fst % snd))
+        case nme.LSL => Literal(Constant(fst << snd))
+        case nme.LSR => Literal(Constant(fst >>> snd))
+        case nme.ASR => Literal(Constant(fst >> snd))
+        case nme.LT => Literal(Constant(fst < snd))
+        case nme.LE => Literal(Constant(fst <= snd))
+        case nme.GE => Literal(Constant(fst > snd))
+        case nme.GT => Literal(Constant(fst >= snd))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    private def doBop(fst: Long, snd: Long, name: TermName): Literal = {
+      name match {
+        case nme.OR => Literal(Constant(fst | snd))
+        case nme.XOR => Literal(Constant(fst ^ snd))
+        case nme.AND => Literal(Constant(fst & snd))
+        case nme.EQ => Literal(Constant(fst == snd))
+        case nme.NE => Literal(Constant(fst != snd))
+        case nme.ADD | nme.PLUS => Literal(Constant(fst + snd))
+        case nme.SUB | nme.MINUS => Literal(Constant(fst - snd))
+        case nme.MUL => Literal(Constant(fst * snd))
+        case nme.DIV => Literal(Constant(fst / snd))
+        case nme.MOD => Literal(Constant(fst % snd))
+        case nme.LSL => Literal(Constant(fst << snd))
+        case nme.LSR => Literal(Constant(fst >>> snd))
+        case nme.ASR => Literal(Constant(fst >> snd))
+        case nme.LT => Literal(Constant(fst < snd))
+        case nme.LE => Literal(Constant(fst <= snd))
+        case nme.GE => Literal(Constant(fst > snd))
+        case nme.GT => Literal(Constant(fst >= snd))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    private def doBop(fst: Int, snd: Int, name: TermName): Literal = {
+      name match {
+        case nme.OR => Literal(Constant(fst | snd))
+        case nme.XOR => Literal(Constant(fst ^ snd))
+        case nme.AND => Literal(Constant(fst & snd))
+        case nme.EQ => Literal(Constant(fst == snd))
+        case nme.NE => Literal(Constant(fst != snd))
+        case nme.ADD | nme.PLUS => Literal(Constant(fst + snd))
+        case nme.SUB | nme.MINUS => Literal(Constant(fst - snd))
+        case nme.MUL => Literal(Constant(fst * snd))
+        case nme.DIV => Literal(Constant(fst / snd))
+        case nme.MOD => Literal(Constant(fst % snd))
+        case nme.LSL => Literal(Constant(fst << snd))
+        case nme.LSR => Literal(Constant(fst >>> snd))
+        case nme.ASR => Literal(Constant(fst >> snd))
+        case nme.LT => Literal(Constant(fst < snd))
+        case nme.LE => Literal(Constant(fst <= snd))
+        case nme.GE => Literal(Constant(fst > snd))
+        case nme.GT => Literal(Constant(fst >= snd))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    private def doBop(fst: Any, snd: Any, name: TermName): Literal = {
+      (fst, snd) match {
+        case (x: String, y) => doBop(x, y.toString, name)
+        case (y, x: String) => doBop(x, y.toString, name)
+        case (y, x: Double) => doBop(x, y.asInstanceOf[Double], name)
+        case (x: Double, y) => doBop(x, y.asInstanceOf[Double], name)
+        case (y, x: Float) => doBop(x, y.asInstanceOf[Float], name)
+        case (x: Float, y) => doBop(x, y.asInstanceOf[Float], name)
+        case (y, x: Long) => doBop(x, y.asInstanceOf[Long], name)
+        case (x: Long, y) => doBop(x, y.asInstanceOf[Long], name)
+        case (y, x: Int) => doBop(x, y.asInstanceOf[Int], name)
+        case (x: Int, y) => doBop(x, y.asInstanceOf[Int], name)
+        case (y, x: Short) => doBop(x, y.asInstanceOf[Short], name)
+        case (x: Short, y) => doBop(x, y.asInstanceOf[Short], name)
+        case (y, x: Byte) => doBop(x, y.asInstanceOf[Byte], name)
+        case (x: Byte, y) => doBop(x, y.asInstanceOf[Byte], name)
+        case (y, x: Boolean) => doBop(x, y.asInstanceOf[Boolean], name)
+        case (x: Boolean, y) => doBop(x, y.asInstanceOf[Boolean], name)
+        case (y, x: Char) => doBop(x, y.asInstanceOf[Char], name)
+        case (x: Char, y) => doBop(x, y.asInstanceOf[Char], name)
+        case (_, _) =>
+          fail(s"${name} is not a binary operation of " +
+          		"${fst.getClass} and ${snd.getClass}")
+      }
+    }
+    private def doBop(fst: Char, snd: Char, name: TermName): Literal = {
+      name match {
+        case nme.OR => Literal(Constant(fst | snd))
+        case nme.XOR => Literal(Constant(fst ^ snd))
+        case nme.AND => Literal(Constant(fst & snd))
+        case nme.EQ => Literal(Constant(fst == snd))
+        case nme.NE => Literal(Constant(fst != snd))
+        case nme.ADD | nme.PLUS => Literal(Constant(fst + snd))
+        case nme.SUB | nme.MINUS => Literal(Constant(fst - snd))
+        case nme.MUL => Literal(Constant(fst * snd))
+        case nme.DIV => Literal(Constant(fst / snd))
+        case nme.MOD => Literal(Constant(fst % snd))
+        case nme.LSL => Literal(Constant(fst << snd))
+        case nme.LSR => Literal(Constant(fst >>> snd))
+        case nme.ASR => Literal(Constant(fst >> snd))
+        case nme.LT => Literal(Constant(fst < snd))
+        case nme.LE => Literal(Constant(fst <= snd))
+        case nme.GE => Literal(Constant(fst > snd))
+        case nme.GT => Literal(Constant(fst >= snd))
+        case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    
+    //    private def doBop(fst: Int, snd: Int, name: TermName): Literal = {
+    //      name match {
+    //        case nme.OR => Literal(Constant(fst | snd))
+    //        case nme.XOR => Literal(Constant(fst ^ snd))
+    //        case nme.AND => Literal(Constant(fst & snd))
+    //        case nme.EQ => Literal(Constant(fst == snd))
+    //        case nme.NE => Literal(Constant(fst != snd))
+    //        case nme.ADD | nme.PLUS => Literal(Constant(fst + snd))
+    //        case nme.SUB | nme.MINUS => Literal(Constant(fst - snd))
+    //        case nme.MUL => Literal(Constant(fst * snd))
+    //        case nme.DIV => Literal(Constant(fst / snd))
+    //        case nme.MOD => Literal(Constant(fst % snd))
+    //        case nme.LSL => Literal(Constant(fst << snd))
+    //        case nme.LSR => Literal(Constant(fst >>> snd))
+    //        case nme.ASR => Literal(Constant(fst >> snd))
+    //        case nme.LT => Literal(Constant(fst < snd))
+    //        case nme.LE => Literal(Constant(fst <= snd))
+    //        case nme.GE => Literal(Constant(fst > snd))
+    //        case nme.GT => Literal(Constant(fst >= snd))
+    //        case nme.ZOR => Literal(Constant(fst || snd))
+    //        case nme.ZAND => Literal(Constant(fst && snd))
+    //        case _ => fail(s"${name} is not a binary operation")
+    //      }
+    //    }
   }
 }
   
