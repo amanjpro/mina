@@ -145,8 +145,26 @@ trait HPEEnvironmentWrapper {
     val tpe: Type;
   }
   case class HPEObject(val tree: Tree, val tpe: Type,
-    val store: Environment) extends HPEAny
+    val store: Environment) extends HPEAny {
+    override def equals(that: Any): Boolean = {
+      that match {
+        case HPEObject(_, `tpe`, `store`) => true
+        case _ => false
+      }
+    }
+
+    override def hashCode = 71 * 5  + tpe.## + store.##
+  }
 
   case class HPELiteral(override val tree: Literal,
-    override val tpe: Type) extends HPEAny 
+    override val tpe: Type) extends HPEAny {
+    override def equals(that: Any): Boolean = {
+      that match {
+        case HPELiteral(t, `tpe`) => tree.value.value == t.value.value
+        case _ => false
+      }
+    }
+
+    override def hashCode = 71 * 5 + tree.value.value.## + tpe.##
+  }
 }

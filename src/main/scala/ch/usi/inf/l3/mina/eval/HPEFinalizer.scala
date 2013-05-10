@@ -14,7 +14,7 @@ class HPEFinalizer(val hpe: HPE) extends PluginComponent {
   import hpe._
   val global: hpe.global.type = hpe.global
   val runsAfter = List[String](hpe.specializer)
-  override val runsBefore = List[String]("patmat")
+  override val runsBefore = List[String]("superaccessors")
   val phaseName = hpe.finalizer
 
   import hpe.global._
@@ -24,6 +24,7 @@ class HPEFinalizer(val hpe: HPE) extends PluginComponent {
     override def name = hpe.finalizer
 
     def apply(unit: CompilationUnit) {
+      println(unit.body)
 //      for (clazz @ ClassDef(mods, name, tparams, impl) <- unit.body) {
 //        val repr = new ClassRepr(name, clazz)
 //        digraph.addClass(repr)

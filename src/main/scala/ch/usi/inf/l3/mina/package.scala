@@ -15,6 +15,6 @@ package object mina {
    * Two identity functions, to tell the plugin to deal with the passed
    * expressions as a CT or RT value.
    */
-  def CT[T](expr: T) = expr
-  def RT[T](expr: T) = expr
+  def CT[T](expr: => T) = expr
+  def RT[T](expr: => T) = expr
 }

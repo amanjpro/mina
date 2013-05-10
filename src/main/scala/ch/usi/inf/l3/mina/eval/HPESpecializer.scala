@@ -33,7 +33,8 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
   class HPETransformer(unit: CompilationUnit)
     extends TypingTransformer(unit) {
 
-    //    import CODE._
+    // FIXME
+    // Still no support for generic methods, but supporting them will be straight forward?!
     override def transform(tree: Tree): Tree = {
       //        var newTree: Tree = tree match {
       //          case cd @ ClassDef(mods, className, tparams, impl) => //if(cd.symbol.isClass)=>
@@ -54,6 +55,11 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       //        }
       //Partially evaluate the program!
       val (newTree, _, env2) = peval(tree, env)
+      /*
+       * FIXME
+       * Make sure you don't need to re-assign the evn2, if you felt that you 
+       * need to do it, then simply just un-comment the line below.
+       */
       env = env2
       super.transform(newTree)
     }
@@ -61,8 +67,10 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
     def typeTree(tree: Tree): Tree = {
       localTyper.typed { tree }
     }
-    private val fevalError: String = "Blocks marked as CT shall be completely " +
+    private val fevalError = "Blocks marked as CT shall be completely " +
       "known and available at compilation time."
+    
+    private val notImpYet = "Not implemented yet"
 
     /*
      * In order to know about a tree, write it in Scala and run the scalac
@@ -85,7 +93,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         case Assign(lhs, rhs) =>
           val (rhs1, env1) = feval(rhs, env)
           val env2 = env.addValue(lhs.symbol.name, rhs1)
-          (rhs1, env2)
+          (rhs1, env2)          
         case Block(stats, expr) =>
           var env2 = env
           var tail = stats
@@ -104,31 +112,91 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
             case Literal(Constant(false)) => feval(elsep, env1)
             case _ => fail(fevalError)
           }
-        //        While loops in Scala are basically nothing but an if-else conditional
-        //        Do we need to think about them then? The following is a while-loop tree
-        //          LabelDef( // def while$1(): Unit, tree.tpe=Unit
-        //          ()
-        //          If( // tree.tpe=Unit
-        //            Apply( // def !=(x: Int): Boolean in class Int, tree.tpe=Boolean
-        //              "x"."$bang$eq" // def !=(x: Int): Boolean in class Int, tree.tpe=(x: Int)Boolean
-        //              "y" // y: Int, tree.tpe=Int
-        //            )
-        //            Block( // tree.tpe=Unit
-        //              Assign( // tree.tpe=<error>
-        //                "y" // y: Int, tree.tpe=Int
-        //                Apply(
-        //                  "x"."$plus"
-        //                  "y"
-        //                )
-        //              )
-        //              Apply( // def while$1(): Unit, tree.tpe=Unit
-        //                "while$1" // def while$1(): Unit, tree.tpe=()Unit
-        //                Nil
-        //              )
-        //            )
-        //            ()
-        //          )
-        //        )
+        // The following four cases are related to pattern matching in Scala 
+//        case cd @ CaseDef(pat, guard, body) => fail(notImpYet +  "  " + cd)
+        case b @ Bind(name, body) => fail(notImpYet + "  " + b)
+        case m @ Match(selector, cases) =>
+          def matched(cse: CaseDef, env: Environment, mat: CTValue): Boolean = {
+            cse.pat match {
+              case Ident(nme.WILDCARD) => false
+              case _ =>
+                val (pat, env3) = feval(cse.pat, env)
+                if (pat == mat) true
+                else false
+            }
+          }
+          val (r1, env2) = feval(selector, env)
+          var continue = true
+          val rs = for (cse <- cases; if continue && matched(cse, env2, r1)) yield {
+            continue = false
+            feval(cse.body, env2)
+          }
+          rs match {
+            case Nil =>
+              val last = cases.last
+              last.pat match {
+                case Ident(nme.WILDCARD) => feval(last.body, env2)
+                case _ => fail(fevalError + " :D " +m)
+              }
+            case _ => rs.head
+          }
+        case a @ Alternative(alts) => fail(notImpYet + "  " + a)
+        
+        
+        case Typed(exp, t2) => feval(exp, env)
+        // TODO What should I do about Functions? I mean this:
+        // vparams => body
+        // I have to think more about this
+        case Function(vparams, body) => fail(notImpYet)
+        
+        /**
+         * An extractor class to create and pattern match with syntax New(tpt). 
+         * This AST node corresponds to the following Scala code:
+         * 
+         * new T
+         * 
+         * This node always occurs in the following context:
+         * 
+         * (new tpt).<init>[targs](args)
+         * 
+         * For example, an AST representation of:
+         * 
+         * new Example[Int](2)(3)
+         * 
+         * is the following code:
+         * 
+         * Apply( Apply( TypeApply( Select(New(TypeTree(typeOf[Example])), 
+         * 					nme.CONSTRUCTOR) TypeTree(typeOf[Int])), 
+         *      			List(Literal(Constant(2)))), 
+         *         			List(Literal(Constant(3))))
+         */
+//        case n @ New(tpt) => fail(notImpYet + "   " + n)
+        
+//      new Example[Int](2)(3)
+//      Apply( Apply( TypeApply( Select(New(TypeTree(typeOf[Example])), nme.CONSTRUCTOR) TypeTree(typeOf[Int])), List(Literal(Constant(2)))), List(Literal(Constant(3))))
+        case cnstrct @ Apply(Select(New(tpt), nme.CONSTRUCTOR), List(Literal(Constant(2)))) =>
+          println(tpt)
+          fail(notImpYet + cnstrct)
+        
+        case Return(expr) => feval(expr, env)
+        
+        /**
+         * An extractor class to create and pattern match with syntax 
+         * LabelDef(name, params, rhs).
+         * This AST node does not have direct correspondence to Scala code. 
+         * It is used for tailcalls and like. For example, while/do are 
+         * desugared to label defs as follows:
+         * 
+         * while (cond) body ==> LabelDef($L, List(), 
+         *                              if (cond) { body; L$() } else ())
+         * 
+         * do body while (cond) ==> LabelDef($L, List(), 
+         * 						body; if (cond) L$() else ())
+         */
+        case LabelDef(name, params, rhs) => fail(notImpYet)
+        case select @ Select(ths @ This(n), name) =>
+          val tree = getMemberTree(ths.symbol.tpe, name, select.symbol.tpe)
+          feval(tree, env)
         // Unary operations
         case select @ Select(qual, name) if (isUnary(select)) =>
           val (r1, env1) =  feval(qual, env)
@@ -136,10 +204,36 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           
           val methodName = name
           doUop(methodName, r1, env1)
+        // TODO I should find a way to support This tree
+//        case ths @ This(name) => 
+//          env.getValue(name) match {
+//            case x: CTValue => (x, env)
+//            case _ =>
+//              val thisVal = CTValue(HPEObject(ths, ths.tpe, env))
+//              (thisVal, env)
+//          }
+        case select @ Select(qual, name) =>
+          val (r1, env1) = feval(tree, env)
+//                
+//          println(qual + "  " + select + "  " + env + " \n"+ name + "  " + name.nameKind)
+//          val (r1, env1) = feval(qual, env)
+//          println(qual + "  " + select + "  " + env + " \n"+ name + "  " + name.nameKind)
+          digraph.getClassRepr(qual.symbol.owner.tpe) match {
+            case Some(repr) =>
+              val member = repr.getMemberTree(name, select.symbol.tpe)
+              r1.v match {
+                case tree: HPEObject =>
+                  feval(member, tree.store)
+                case _ => fail(fevalError)
+              }
+            case None => fail(fevalError)
+          }
+        case Apply(fun, t) if (fun.symbol.name == newTermName("CT")) =>
+          feval(t.head, env)
         // Binary operations
         case apply @ Apply(fun @ Select(r, l), args) if (isBinary(apply)) =>
           val arg1 = apply.args.head
-          val (r1, env1) =  feval(r, env)
+          val (r1, env1) = feval(r, env)
           val (arg11, env2) = feval(arg1, env1)
 
           val method = fun.symbol
@@ -168,7 +262,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               val (v, _) = feval(methodTree.rhs, funStore)
               (v, env1)
             case None =>
-              fail(fevalError + fun + "   " + reciever)
+              fail(fevalError + "  kk " + apply + "  "+ fun + "   " + reciever)
           }
         //            val result: CTValue = methodSymbol(fun) match {
         //              case None => fail(s"""Couldn't find the applied method call 
@@ -256,8 +350,60 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           val (rtree, rhs1, env1) = peval(rhs, env)
           val env2 = env.addValue(lhs.symbol.name, rhs1)
           (typeTree(treeCopy.Assign(a, lhs, rtree)), rhs1, env2)
-        //TODO change this newTermName to TermName when Scala will have it
-        case Apply(fun, t) if (fun.symbol.name == newTermName("CT")) =>
+        // FIXME the code is not completely implemented
+        case m @ Match(selector, cases) =>
+          def matched(cse: CaseDef, env: Environment, mat: Value): Boolean = {
+            cse.pat match {
+              case Ident(nme.WILDCARD) => false
+              case _ => 
+                val (pat, v, env3) = peval(cse.pat, env)
+                if (v.value == mat.value) true
+                else false
+            }
+          }
+          val (r1, v, env2) = peval(selector, env)
+          v match {
+            case CTValue(_) | AbsValue(_) => 
+              var continue = true
+              val rs = for (cse <- cases; 
+            		  		if continue && matched(cse, env2, v)) yield {
+                continue = false
+                peval(cse.body, env2)
+              }
+              rs match {
+                case Nil =>
+                  val last = cases.last
+                  last.pat match {
+                    case Ident(nme.WILDCARD) => peval(last.body, env2)
+                    case _ => fail("No match found exception " + m) 
+                  }
+                case _ => rs.head
+              }
+            case _ =>
+              val newCases = for(cse <- cases) yield {
+                val (ncse, vncse, _) = peval(cse.body, env2)
+                vncse match {
+                  case CTValue(_) | AbsValue(_) => 
+                    vncse.value match {
+                      case Some(x) => 
+                        typeTree(treeCopy.CaseDef(cse, cse.pat, 
+                            cse.guard, x.tree)).asInstanceOf[CaseDef]
+                      case _ => 
+                        typeTree(treeCopy.CaseDef(cse, cse.pat, 
+                            cse.guard, ncse)).asInstanceOf[CaseDef]
+                    }
+                  case Top | Bottom => 
+                    typeTree(treeCopy.CaseDef(cse, cse.pat, 
+                            cse.guard, ncse)).asInstanceOf[CaseDef]
+                }
+              }
+              val newMatch = treeCopy.Match(typeTree(r1), selector, newCases)
+              (typeTree(newMatch), Top, env2) 
+          }
+          
+        // TODO change this newTermName to TermName when Scala will have it
+        case a @ Apply(fun, t) if (fun.symbol.name == newTermName("CT")) =>
+          //println(a)
           val (v, env2) = feval(t.head, env)
           (v.value, v, env2)
         //(tree, Top, env)
@@ -285,12 +431,11 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       var fevaled: List[CTValue] = Nil
       var env = store
       var tail = args
-      var head = args.head
       while (tail != Nil) {
+        var head = args.head
         val (arg1, temp) = feval(head, env)
         fevaled = arg1 :: fevaled
         env = temp
-        head = tail.head
         tail = tail.tail
       }
       (fevaled.reverse, env)
@@ -346,7 +491,9 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       t match {
         case Some(HPELiteral(x: Tree, _)) => x
         case Some(HPEObject(x: Tree, _, _)) => x
-        case _ => typeTree(treeBuilder.makeBlock(Nil))
+        case _ => 
+          println(t)
+          typeTree(treeBuilder.makeBlock(Nil))
       }
     }
 
@@ -354,7 +501,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       t match {
         case Some(HPELiteral(_, x: Type)) => x
         case Some(HPEObject(_, x: Type, _)) => x
-        case _ => null
+        case _ => fail(s"Unexpected type definition ${t}")
       }
     }
 
@@ -547,6 +694,13 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         case nme.UNARY_+ => Literal(Constant(x.unary_+))
         case nme.UNARY_- => Literal(Constant(x.unary_-))
         case _ => fail(s"${name} is not a binary operation")
+      }
+    }
+    
+    private def getMemberTree(tpe1: Type, m: Name, mType: Type): Tree = {
+      digraph.getClassRepr(tpe1) match {
+      	case Some(repr) => repr.getMemberTree(m, mType)
+        case None => fail(s"Could not find class ${tpe1}")
       }
     }
     
