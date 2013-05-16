@@ -1,11 +1,11 @@
 #!/bin/sh
-exec scala -feature "$0" "$@"
-!#
+exec scala -save -feature "$0" "$@"
+::!#
 
 /*
  *  Copyright (c) <2013>, Amanj Sherwany <http://www.amanj.me>
  * All rights reserved.
- * A simple shell script, to automatically build the project and test it
+ * A simple scala script, to automatically build the project and test it
  */
 
 import sys.process._
@@ -85,9 +85,11 @@ if(args.length < 1) {
 }
 
 
-if(!args.contains("-a") && ! args.contains("--all"))
+if(!args.contains("-d") && ! args.contains("--doc") &&
+  !args.contains("-a") && ! args.contains("--all"))
   args.init.foreach(processArgs(_))
 else args.foreach(processArgs(_))
+
 
 if (helpf){
   help
@@ -96,7 +98,7 @@ if (helpf){
 
 val file = args.last
 
-if(!testAll && file.startsWith("-")) {
+if(!doc && !testAll && file.startsWith("-")) {
   usage
   System.exit(1)
 }
@@ -121,7 +123,9 @@ if(doc) {
   println("===========================")
   println("    Generating Scaladoc    ")
   println("===========================")
-  "sbt api" run(pio) exitValue
+  "sbt doc" run(pio) exitValue
+  
+  System.exit(0)
 }
 
 if(!testAll) {
@@ -149,7 +153,7 @@ if(!testAll) {
 
     // First compile it with the plugin
     val testFile = s"${testBase}${sp}${tst}"
-    s"scalac -d ${testDest} -cp ${mina} -Xplugin:${mina} ${testFile}" run(pio)
+    s"scalac -d ${testDest} -cp ${mina} -Xplugin:${mina} ${testFile}" run(pio) exitValue
 
     // Then compile it without the plugin
     s"scalac -d ${plainDest} -cp ${mina} ${testFile}" run(pio) exitValue

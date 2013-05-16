@@ -13,6 +13,10 @@ private[mina] trait HPEClassWrapper {
   self: HPE with HPEEnvironmentWrapper =>
   import HPEClassWrapper.this.global._
 
+  /*
+   * ImplDef if a super class of both ClassDef (for classes) and ModuleDef 
+   * for (objects)
+   */
   class ClassRepr(val tpe: Type, private var classTree: ImplDef = null) {
     
     def hasMember(name: TermName, t: Type): Boolean = {
@@ -30,16 +34,16 @@ private[mina] trait HPEClassWrapper {
       var flag = true
       var result: Tree = null
       if (hasClassTree) {
-        for (m <- classTree.impl.body 
+        for (m <- classTree.impl.body
             if(name == m.symbol.name && t == m.symbol.tpe)) {
           flag = false
           result = m
         }
       }
-      if(flag)
+      if(flag){
         throw new HPEError(s"No member in class ${tpe} " +
-        		s"has the name ${name} with the type ${t}")
-      else
+        	s"has the name ${name} with the type ${t}")
+      }else
         result
     }
 

@@ -174,9 +174,25 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         
 //      new Example[Int](2)(3)
 //      Apply( Apply( TypeApply( Select(New(TypeTree(typeOf[Example])), nme.CONSTRUCTOR) TypeTree(typeOf[Int])), List(Literal(Constant(2)))), List(Literal(Constant(3))))
-        case cnstrct @ Apply(Select(New(tpt), nme.CONSTRUCTOR), List(Literal(Constant(2)))) =>
-          println(tpt)
-          fail(notImpYet + cnstrct)
+        case cnstrct @ Apply(Select(New(tpt), nme.CONSTRUCTOR), args) =>
+          digraph.getClassRepr(tpt.tpe) match {
+            case Some(clazz) =>
+              val tpes = args.map(_.symbol)
+              val mtree = clazz.getMemberTree(nme.CONSTRUCTOR, 
+                  MethodType(tpes, tpt.tpe))
+              mtree match {
+                case methodTree : DefDef =>
+                  val (fevaledArgs, env1) = fevalArgs(args, env)
+                  val params = methodTree.vparamss.flatten.map(_.name)
+                  val funStore = env.newStore((params, fevaledArgs))
+                  val (v, env2) = feval(methodTree.rhs, funStore)
+                  val obj = HPEObject(cnstrct, clazz.tpe, env2)
+                  (CTValue(obj), env)
+                case _ => fail(fevalError)
+              }
+              
+            case None => fail(s"${fevalError} ${tpt}")
+          }
         
         case Return(expr) => feval(expr, env)
         
@@ -250,6 +266,13 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         //            case _ => fail(fevalError)
         //          }
         //          (v, env1)
+        // If {{{super}}} was nothing but {{{Object}}} then we just don't bother
+        // executing its constructor
+        // TODO once we build a framework to read binary classes to an AST tree
+        // we can get rid of this
+        case apply @ Apply(fun, args) if(isAnyConstructor(apply)) =>
+          val tr = reify(new Object()).tree
+          (CTValue(HPEObject(tr, tr.tpe, env)), env)
         case apply @ Apply(fun, args) =>
           val reciever = fun.symbol.owner.tpe
           digraph.getClassRepr(reciever) match {
@@ -531,6 +554,10 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         case x: DefDef => x
         case x => fail(s"Unexpected method definition ${x}")
       }
+    }
+    
+    private def isAnyConstructor(a: Apply): Boolean = {
+      a.symbol.fullName == "java.lang.Object.<init>"
     }
 
     private def isUnary(select: Select): Boolean = {
