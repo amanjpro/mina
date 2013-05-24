@@ -1,0 +1,66 @@
+\documentclass[10pt, a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[english]{isodate}
+\usepackage[parfill]{parskip}
+\usepackage[colorlinks=true]{hyperref}
+
+\title{\textbf{\huge{Mina 1.0}}\\ \large{A Hybrid-Partial Evaluator for Scala}\\
+  \small{\url{http://www.amanj.me/projects/mina}}}
+\author{Amanj Sherwany \\ \small{\url{http://www.amanj.me}}}
+\date{Draft of \today}
+
+\begin{document}
+\maketitle
+\pagenumbering{arabic}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+\subsection{What is Mina?}
+Mina is a Partial Evaluator for Scala. It is a port of Civet for Java, which is
+an implementation of Hybrid-Partial Evaluator paper
+(\url{http://www.cs.utexas.edu/~wcook/Civet/}). ``Hybrid partial evaluation
+(HPE) is a pragmatic approach to partial evaluation that borrows ideas from
+both online and offline partial evaluation. HPE performs offline-style
+specialization using an online approach without static binding time analysis.
+The goal of HPE is to provide a practical and predictable level of optimization
+for programmers, with an implementation strategy that fits well within existing
+compilers or interpreters. HPE requires the programmer to specify where partial
+evaluation should be applied. It provides no termination guarantee and reports
+errors in situations that violate simple binding time rules, or have incorrect
+use of side effects in compile-time code.''\footnote{from Civet
+\url{http://www.cs.utexas.edu/~wcook/Civet/}}
+
+Mina is a Scala compiler plugin, runs after the \textbf{patmat} phase, and
+partially evaluates Scala source code to a more efficient code, which has
+exactly the same meaning as the original one.
+
+The plugin name is mina and it is read like \emph{/mi:na:/}, which is a Kurdish
+name of Forget-me-not flower \url{http://en.wikipedia.org/wiki/Forget-me-not}.
+
+
+\subsection{Partial Evaluation}
+``In computing, partial evaluation is a technique for several different types
+of program optimization by specialization. The most straightforward application
+is to produce new programs which run faster than the originals while being
+guaranteed to behave in the same way.
+
+A computer program, \emph{prog}, is seen as a mapping of input data into output
+data:
+\centerline{$prog: I_{static} \times I_{dynamic} \to O$}
+$I_{static}$ the static data, is the part of the input data known at compile
+time. The partial evaluator transforms $<prog, I_{static}>$ into $prog^{*}:
+I_{dynamic} \to O$ by precompiling all static input at compile time. $prog^{*}$
+is called the ``residual program'' and should run more efficiently than the
+original program. The act of partial evaluation is said to ``residualize''
+$prog$ to $prog^*$.''\footnote{from Wikipedia
+\url{http://en.wikipedia.org/wiki/Partial_evaluation}}
+
+\section{How to use Mina}
+\section{Use cases}
+\section{Credits}
+
+\end{document}

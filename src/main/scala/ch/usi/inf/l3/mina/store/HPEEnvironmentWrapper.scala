@@ -29,16 +29,57 @@ trait HPEEnvironmentWrapper {
       }
     }
 
-    def addValue(v: TermName, value: Value): Environment = {
+
+    def addValues(valvars: List[(TermName, Value)]): Environment = {
+      var env = this
+      var tail = valvars
+      while(tail != Nil){
+        val (vr, vl) = tail.head
+        env = env.addValue(vr, vl)
+        tail = tail.tail
+      }
+      env
+    }
+    def updateValue(v: TermName, value: Value): Environment = {
       location.get(v) match {
         case None =>
-          val l = loc + 1
-          val m = location + (v -> l)
-          val s = store + (l -> value)
-          new Environment(m, s, l)
+          addValue(v, value)
         case Some(l) =>
           val s = store + (l -> value)
           new Environment(location, s, l)
+      }
+    }
+    def addValue(v: TermName, value: Value): Environment = {
+      val l = loc + 1
+      val m = location + (v -> l)
+      val s = store + (l -> value)
+      new Environment(m, s, l)
+    }
+    private def makeConsistent(x: Environment, y: Environment): Environment = {
+      var r = this
+      for((t, l) <- x.location){
+        if(x.getValue(t) == Top) r = r.addValue(t, Top)
+        else {
+          val vx = x.getValue(t)
+          val vy = y.getValue(t)
+          if(vx == vy) r.addValue(t, vx)
+          else if(vy == Top) r.addValue(t, Top)
+          else r.addValue(t, Bottom)
+        }
+      }
+      r
+    } 
+    
+    def makeConsistent(envs: List[Environment]): Environment = {
+      envs match {
+        case Nil => new Environment
+        case x :: Nil => x
+        case x :: y :: Nil =>
+          if(x.location.size >= y.location.size) makeConsistent(x, y)
+          else makeConsistent(y, x)
+        case x :: y :: xs =>
+          val x1 = makeConsistent(x :: y :: Nil)
+          makeConsistent(x1 :: xs)
       }
     }
 
@@ -70,16 +111,6 @@ trait HPEEnvironmentWrapper {
       tempStore
     }
 
-    def newStore(varval: List[(TermName, Value)]): Environment = {
-      var env = new Environment
-      var tail = varval
-      while (tail != Nil) {
-        val (x, v) = tail.head
-        env = env.addValue(x, v)
-        tail = tail.tail
-      }
-      env
-    }
     /**
      * Removes a variable from the environment
      *
@@ -114,6 +145,22 @@ trait HPEEnvironmentWrapper {
     
     override def toString: String = location.toString + "\n" + store.toString
   }
+  
+  object Environment {
+    def apply(varval: List[(TermName, Value)]): Environment = {
+      newStore(varval)
+    }
+    def newStore(varval: List[(TermName, Value)]): Environment = {
+      var env = new Environment
+      var tail = varval
+      while (tail != Nil) {
+        val (x, v) = tail.head
+        env = env.addValue(x, v)
+        tail = tail.tail
+      }
+      env
+    }
+  }
 
   // ---------------------- Value -----------------------------------------
   sealed trait Value {
@@ -121,21 +168,22 @@ trait HPEEnvironmentWrapper {
   }
 
   case object Bottom extends Value {
-    //TODO or should I throw an exception?
     override def value: Option[HPEAny] = None
   }
 
   case object Top extends Value {
-    //TODO or should I throw an exception?
     override def value: Option[HPEAny] = None
   }
 
   case class CTValue(v: HPEAny) extends Value {
     override def value: Option[HPEAny] = Some(v)
+    override def toString: String = value.get.toString
+    def toTree = v.tree
   }
 
   case class AbsValue(v: HPEAny) extends Value {
     override def value: Option[HPEAny] = Some(v)
+    def toCTValue = CTValue(v)
   }
 
   // ---------------------- Simulating Runtime Object  -----------------------
@@ -145,14 +193,14 @@ trait HPEEnvironmentWrapper {
     val tpe: Type;
   }
   case class HPEObject(val tree: Tree, val tpe: Type,
-    val store: Environment) extends HPEAny {
+		  val store: Environment) extends HPEAny {
     override def equals(that: Any): Boolean = {
       that match {
         case HPEObject(_, `tpe`, `store`) => true
         case _ => false
       }
     }
-
+    override def toString: String = tree.toString.replaceAll("[\\[\\]]", "")
     override def hashCode = 71 * 5  + tpe.## + store.##
   }
 
@@ -165,6 +213,7 @@ trait HPEEnvironmentWrapper {
       }
     }
 
+    override def toString: String = tree.value.toString
     override def hashCode = 71 * 5 + tree.value.value.## + tpe.##
   }
 }

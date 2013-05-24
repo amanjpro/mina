@@ -14,7 +14,7 @@ class HPEFinder(val hpe: HPE) extends PluginComponent {
   import hpe._
 
   val global: hpe.global.type = hpe.global
-  val runsAfter = List[String]("patmat")
+  val runsAfter = List[String](bfr)
   override val runsBefore = List[String](hpe.specializer)
   val phaseName = hpe.finder
 

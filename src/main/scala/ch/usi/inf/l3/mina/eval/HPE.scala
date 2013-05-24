@@ -23,12 +23,17 @@ class HPE(val global: Global) extends Plugin
   import global._
 
   var env = new Environment
+  var closed = false
   val digraph = new ClassDigraph
+  val classBank = new ClassBank
+  
   
   val name = "mina"
+  val bfr = "patmat"
   val finder = s"${name}-finder"
   val specializer = s"${name}-specializer"
   val finalizer = s"${name}-finalizer"
+  val aftr = "superaccessors"
   
   val description = """|This is a partial evaluator plugin based on Hybrid 
     |Partial Evaluation by W. Cook and A. Shali 
@@ -48,5 +53,21 @@ class HPE(val global: Global) extends Plugin
 		  	new HPEFinder(this), new HPEFinalizer(this),
 		      new HPESpecializer(this))
 
+  
+  override def processOptions(options: List[String], error: String => Unit) = {
+    for(option <- options) {
+      if(option.startsWith("open")) {
+        closed = false
+      } else if(option.startsWith("closed")) {
+        closed = true
+      } else {
+        error(s"Option not understood: ${option}")
+      }
+    }
+  }
+  override val optionsHelp: Option[String] = 
+    Some("""| -P:mina:open            Compiler considers the world as open
+            | -P:mina:close           Compiler considers the world as closed""".stripMargin)
+  
 
 }

@@ -14,7 +14,7 @@ class HPEFinalizer(val hpe: HPE) extends PluginComponent {
   import hpe._
   val global: hpe.global.type = hpe.global
   val runsAfter = List[String](hpe.specializer)
-  override val runsBefore = List[String]("superaccessors")
+  override val runsBefore = List[String](aftr)
   val phaseName = hpe.finalizer
 
   import hpe.global._
