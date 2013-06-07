@@ -45,8 +45,15 @@ trait HPEEnvironmentWrapper {
         case None =>
           addValue(v, value)
         case Some(l) =>
-          val s = store + (l -> value)
-          new Environment(location, s, l)
+          val old = store(l) 
+          old match {
+            case Bottom | _ if(old.tpe == value.tpe) =>
+              val s = store + (l -> value)
+              new Environment(location, s, l)
+            case _ => throw new HPEError(s"Once you make a variable, CT, " +
+            		"Abstract or Top you may not change it ${v}")
+          }
+          
       }
     }
     def addValue(v: TermName, value: Value): Environment = {
@@ -164,26 +171,35 @@ trait HPEEnvironmentWrapper {
 
   // ---------------------- Value -----------------------------------------
   sealed trait Value {
+    protected val BOTTOM = 0
+    protected val CT = 1
+    protected val RT = 2
+    protected val TOP = 3
     def value: Option[HPEAny];
+    def tpe: Int;
   }
 
   case object Bottom extends Value {
     override def value: Option[HPEAny] = None
+    def tpe: Int = BOTTOM
   }
 
   case object Top extends Value {
     override def value: Option[HPEAny] = None
+    def tpe: Int = TOP
   }
 
   case class CTValue(v: HPEAny) extends Value {
     override def value: Option[HPEAny] = Some(v)
     override def toString: String = value.get.toString
     def toTree = v.tree
+    def tpe: Int = CT
   }
 
   case class AbsValue(v: HPEAny) extends Value {
     override def value: Option[HPEAny] = Some(v)
     def toCTValue = CTValue(v)
+    def tpe: Int = RT
   }
 
   // ---------------------- Simulating Runtime Object  -----------------------
@@ -215,5 +231,9 @@ trait HPEEnvironmentWrapper {
 
     override def toString: String = tree.value.toString
     override def hashCode = 71 * 5 + tree.value.value.## + tpe.##
+  }
+  
+  case class HPETree(val tree: Tree) extends HPEAny {
+    val tpe: Type = tree.tpe
   }
 }

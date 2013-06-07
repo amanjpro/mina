@@ -1,3 +1,5 @@
+//package test
+
 import ch.usi.inf.l3.mina._
 
 object Test{
@@ -11,15 +13,17 @@ object Test{
   }
   def main(str: Array[String]) {
     val c = CT(b(1))
-    val fail = CT(new Test)
-    val j = c
-    val ll = CT(j + k())
+    val d = b(2)
+    val obj = CT(new Test)
+    val j = 9
+    val ll = j + obj.dd(CT("test"), 0)
     println(ll)
   }
 }
 
 class Test {
-  def dd() = "kk"
+  def dd() = "ddd"
+  def dd(b: String, n: Int) = "kk" + b + n
   def r() = {
     val d = dd()
     val a = 1
@@ -27,3 +31,4 @@ class Test {
     a
   }
 }
+

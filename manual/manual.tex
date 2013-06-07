@@ -5,6 +5,29 @@
 \usepackage[english]{isodate}
 \usepackage[parfill]{parskip}
 \usepackage[colorlinks=true]{hyperref}
+\usepackage{xspace}
+\usepackage{listings}
+
+
+\lstdefinelanguage{scala}{
+  morekeywords={abstract,case,catch,class,def,%
+    do,else,extends,false,final,finally,%
+    for,if,implicit,import,match,mixin,%
+    new,null,object,override,package,%
+    private,protected,requires,return,sealed,%
+    super,this,throw,trait,true,try,%
+    type,val,var,while,with,yield},
+  otherkeywords={=>,<-,<\%,<:,>:,\#,@},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[n]{/*}{*/},
+  morestring=[b]",
+  morestring=[b]',
+  morestring=[b]"""
+}
+
+\newcommand{\CT}{\texttt{CT}\xspace}
+\newcommand{\RT}{\texttt{RT}\xspace}
 
 \title{\textbf{\huge{Mina 1.0}}\\ \large{A Hybrid-Partial Evaluator for Scala}\\
   \small{\url{http://www.amanj.me/projects/mina}}}
@@ -17,7 +40,7 @@
 
 \tableofcontents
 \newpage
-
+\lstset{language=scala}
 \section{Introduction}
 \subsection{What is Mina?}
 Mina is a Partial Evaluator for Scala. It is a port of Civet for Java, which is
@@ -60,7 +83,83 @@ $prog$ to $prog^*$.''\footnote{from Wikipedia
 \url{http://en.wikipedia.org/wiki/Partial_evaluation}}
 
 \section{How to use Mina}
-\section{Use cases}
+
+\subsection{Compile-time(\CT) vs. Runtmie(\RT)}
+With Mina you can mark a block of code to be fully evaluated at compile time.
+If a variable contains a compile time (\CT) code, then the variable itself is a
+\CT variable and will not be present at runtime. Here is a simple of using \CT:
+
+\begin{lstlisting}
+  /**
+   * 2 is evaluated at compile time,
+   * therefore x is a compile-time variable,
+   * i.e. it won't be present at runtime
+   */
+  val x = CT(2)    
+  
+  /**
+   * y is a result of adding 5 to x,
+   * but x is already a compile-time
+   * variable, which means the result
+   * of x + 5 will be a compile-time
+   * value, which means y is also a
+   * compile-time variable
+   */              
+  val y = x + 5    
+  
+  /**
+   * since y is a compile-time variable,
+   * this statement will be evaluated to 
+   * println(7)
+   */  
+  println(y)
+  
+  /**
+   * The above three statements will be 
+   * evaluated to one statement only:
+   * 
+   * println(7)
+   */
+  
+\end{lstlisting}
+
+One can also mark a block of code to be not evaluated at all, simply by surrounding the block with \RT(...), for example:
+
+\begin{lstlisting}
+  /**
+   * x won't be evaluated, since the 
+   * right-hand side expression
+   * is marked with RT
+   */
+  val x = RT(2)
+  
+  /**
+   * y won't be evaluated too, 
+   * since x is RT
+   */
+  val y = x + 5       
+  
+  /**
+   * The following statement won't be 
+   * evaluated too, since y is RT
+   */
+  println(y)
+\end{lstlisting}
+
+Now you should know that you can either tag an (expression/statement/block of
+statements) is \CT or \RT. \CT makes sure that everything will be fully
+evaluated at compile time, while \RT makes sure that everything will be
+evaluated at runtime. In other words, no \CT inside \RT is allowed, and no \RT
+inside \CT is allowed.
+
+
+
+But if you do not tag an (expression/statement/block of statements) with
+neither \CT nor \RT, then it will be partially evaluated at compilation-time
+helping the program to speed-up. In the next sub-sections we will talk about
+this in detail.
+
+
 \section{Credits}
 
 \end{document}

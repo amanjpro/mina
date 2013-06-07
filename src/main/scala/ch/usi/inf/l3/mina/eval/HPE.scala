@@ -54,6 +54,7 @@ class HPE(val global: Global) extends Plugin
 		      new HPESpecializer(this))
 
   
+		      
   override def processOptions(options: List[String], error: String => Unit) = {
     for(option <- options) {
       if(option.startsWith("open")) {

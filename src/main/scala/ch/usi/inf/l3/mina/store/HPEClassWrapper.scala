@@ -20,7 +20,8 @@ private[mina] trait HPEClassWrapper {
   class ClassRepr(val tpe: Type, private var classTree: ImplDef = null) {
     private var specialized: Map[(Name, List[Value]), DefDef] = Map.empty 
     def getNextMethod(base: TermName, values: List[Value]) = {
-      val tail = values.toString.replaceAll("[\\[\\]]", "")
+      var tail = values.toString.replaceAll("[\\[\\]]", "")
+      tail = values.toString.replaceAll("[\\(\\)]", "")
       val name = base.toString + "_m$_i$_"  + tail + "_n$_a$"
       newTermName(name)
     }
@@ -36,6 +37,8 @@ private[mina] trait HPEClassWrapper {
       }
       flag
     }
+    
+    def printMembers() = println(classTree.impl.body)
 
     def getMemberTree(name: TermName, t: Type): Tree = {
       var flag = true
@@ -50,7 +53,7 @@ private[mina] trait HPEClassWrapper {
       }
       if (flag) {
         throw new HPEError(s"No member in class ${tpe} " +
-          s"has the name ${name} with the type ${t}")
+          s"has a member ${name} with the type ${t}")
       } else
         result
     }
@@ -117,7 +120,7 @@ private[mina] trait HPEClassWrapper {
 
     
     private var speciazlized: Map[(Type, List[Value]), ClassRepr] = Map.empty
-    
+    private var allMorphs: Map[Type, List[ImplDef]] = Map.empty
 
     private def nullify(args: List[Value]): List[Value] = {
       var temp: List[Value] = Nil
@@ -129,6 +132,13 @@ private[mina] trait HPEClassWrapper {
       }
       temp.reverse
     }
+    
+    def getAllMorphs(tpe: Type): List[ImplDef] = {
+      allMorphs.get(tpe) match {
+        case Some(classes) => classes
+        case _ => Nil
+      }
+    } 
 
     def getNextClassName(base: TermName): TermName = {
       val newName = base + "_m$_i$_" + nextClassID + "_n$_a$"
@@ -164,19 +174,28 @@ private[mina] trait HPEClassWrapper {
     private var reversed = Map.empty[Int, C]
     private var edges = Map.empty[Int, List[Int]]
 
-    def findCompanionModule(name: String): Option[C] = {
-      var r: Option[C] = None
-      var tail = nodes.keys.toList
-      while (tail != Nil) {
-        val clazz = tail.head
-        if (clazz.hasClassTree &&
-          clazz.tree.name.toString == name &&
-          clazz.tree.symbol.isModule) {
-          r = Some(clazz)
+    def findCompanionModule(clazz: Symbol): Option[C] = {
+      if(clazz.isModule) {
+        getClassRepr(clazz.tpe)
+      } else {
+        val mod = clazz.companionModule
+        if(mod != NoSymbol) {
+          getClassRepr(mod.tpe)
         }
-        tail = tail.tail
+        else None
       }
-      r
+//      var r: Option[C] = None
+//      var tail = nodes.keys.toList
+//      while (tail != Nil) {
+//        val clazz = tail.head
+//        if (clazz.hasClassTree &&
+//          clazz.tree.name.toString ==  &&
+//          clazz.tree.symbol.isModule) {
+//          r = Some(clazz)
+//        }
+//        tail = tail.tail
+//      }
+//      r
     }
 
     def addClass(clazz: C) = {
