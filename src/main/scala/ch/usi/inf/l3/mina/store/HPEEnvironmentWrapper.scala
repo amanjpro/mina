@@ -128,6 +128,17 @@ trait HPEEnvironmentWrapper {
       val location2 = location - (v)
       new Environment(location2, store, loc)
     }
+    
+    def remove(vars: List[TermName]): Environment = {
+      var tail = vars
+      var tempStore = this
+      while(tail != Nil) {
+        val head = tail.head
+        tail = tail.tail
+        tempStore = remove(head)
+      }
+      tempStore
+    }
 
     private def getPEValue(v: TermName): Option[Value] = {
       location.get(v) match {
@@ -154,6 +165,7 @@ trait HPEEnvironmentWrapper {
   }
   
   object Environment {
+    def empty: Environment = { new Environment }
     def apply(varval: List[(TermName, Value)]): Environment = {
       newStore(varval)
     }

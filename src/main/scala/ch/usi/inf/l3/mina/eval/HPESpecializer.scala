@@ -47,10 +47,10 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
     }
 
     def typeTree(tree: Tree): Tree = {
-//      if(tree.symbol != null && tree.symbol != NoSymbol){
-//        
-//      } else 
-    	  localTyper.typed { tree }
+      //      if(tree.symbol != null && tree.symbol != NoSymbol){
+      //        
+      //      } else 
+      localTyper.typed { tree }
     }
     private val fevalError = "Blocks marked as CT shall be completely " +
       "known and available at compilation time."
@@ -238,7 +238,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         // we can get rid of this
         case apply @ Apply(fun, args) if (isAnyConstructor(apply)) =>
           val tr = typeTree(reify(new Object()).tree)
-          (CTValue(HPEObject(tr, tr.tpe, new Environment)), env)
+          (CTValue(HPEObject(tr, tr.tpe, Environment.empty)), env)
         case apply @ Apply(fun @ Select(obj, m), args) =>
           val (obj2, env2) = feval(obj, env)
           val reciever = obj.symbol.tpe
@@ -248,7 +248,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           val reciever = fun.symbol.owner.tpe
           digraph.getClassRepr(reciever) match {
             case Some(clazz) =>
-              val (_, _, env2) = peval(clazz.tree, new Environment)
+              val (_, _, env2) = peval(clazz.tree, Environment.empty)
               val method = fun.symbol
               fevalApply(reciever, method, args, env2)
             case None =>
@@ -265,7 +265,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
     def peval(tree: Tree, env: Environment): (Tree, Value, Environment) = {
       tree match {
         case clazz: ImplDef =>
-          var newEnv = new Environment
+          var newEnv = Environment.empty
           var tail = clazz.impl.body
           var nbody: List[Tree] = Nil
           while (tail != Nil) {
@@ -276,29 +276,29 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
             tail = tail.tail
           }
           nbody = nbody.reverse
-          
-//          val newClazz = clazz match {
-//            case ClassDef(mods, name, tparams, impl) =>
-//              val tmplt = typeTree(treeCopy.Template(impl, impl.parents, impl.self, nbody))
-//              treeCopy.ClassDef(clazz, mods, name, tparams, tmplt.asInstanceOf[Template])
-//            case ModuleDef(mods, name, impl) =>
-//              val tmplt = typeTree(treeCopy.Template(impl, impl.parents, impl.self, nbody))
-//              treeCopy.ModuleDef(clazz, mods, name, tmplt.asInstanceOf[Template])
-//          }
-//          newClazz.tpe = clazz.symbol.tpe
-//          val tclazz = typeTree(newClazz)
-//          digraph.getClassRepr(tclazz.symbol.tpe) match {
-//            case Some(x) => 
-//              x.tree = tclazz
-//            case None =>
-//              val repr = new ClassRepr(clazz.impl.symbol.tpe, tclazz)
-//              digraph.addClass(repr)
-//              for (p <- tclazz.impl.parents) {
-//                val parent = new ClassRepr(p.symbol.tpe)
-//                digraph.addClass(parent)
-//                digraph.addSubclass(parent, repr)
-//              }
-//          }
+
+          //          val newClazz = clazz match {
+          //            case ClassDef(mods, name, tparams, impl) =>
+          //              val tmplt = typeTree(treeCopy.Template(impl, impl.parents, impl.self, nbody))
+          //              treeCopy.ClassDef(clazz, mods, name, tparams, tmplt.asInstanceOf[Template])
+          //            case ModuleDef(mods, name, impl) =>
+          //              val tmplt = typeTree(treeCopy.Template(impl, impl.parents, impl.self, nbody))
+          //              treeCopy.ModuleDef(clazz, mods, name, tmplt.asInstanceOf[Template])
+          //          }
+          //          newClazz.tpe = clazz.symbol.tpe
+          //          val tclazz = typeTree(newClazz)
+          //          digraph.getClassRepr(tclazz.symbol.tpe) match {
+          //            case Some(x) => 
+          //              x.tree = tclazz
+          //            case None =>
+          //              val repr = new ClassRepr(clazz.impl.symbol.tpe, tclazz)
+          //              digraph.addClass(repr)
+          //              for (p <- tclazz.impl.parents) {
+          //                val parent = new ClassRepr(p.symbol.tpe)
+          //                digraph.addClass(parent)
+          //                digraph.addSubclass(parent, repr)
+          //              }
+          //          }
           (clazz, Top, env)
         case method @ DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
           val (rhs1, _, temp) = peval(rhs, env)
@@ -455,10 +455,10 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
                 val newnw = typeTree(treeCopy.Apply(cnstrct,
                   treeCopy.Select(n, treeCopy.New(nw, memc), nme.CONSTRUCTOR),
                   rargs))
-                val nobj = HPEObject(newnw, clazz.tpe, new Environment)
+                val nobj = HPEObject(newnw, clazz.tpe, Environment.empty)
                 (newnw, AbsValue(nobj), env)
               } else {
-                val store = new Environment
+                val store = Environment.empty
                 val cnstrct2 = typeTree(treeCopy.Apply(cnstrct, n, trees))
                 val obj = HPEObject(cnstrct2, tpt.tpe, store)
                 (cnstrct2, AbsValue(obj), env2)
@@ -472,16 +472,16 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           val lbl2 = typeTree(treeCopy.LabelDef(lbl, name, params, r))
           (lbl2, Top, env2)
         case select @ Select(New(tpt), name) =>
-          val obj = HPEObject(select, tpt.tpe, new Environment)
-		  (select, AbsValue(obj), env)
-        case select @ Select(qual, name) if(qual.symbol != null &&
-            								qual.symbol != NoSymbol &&
-            								qual.symbol.isPackage) =>
+          val obj = HPEObject(select, tpt.tpe, Environment.empty)
+          (select, AbsValue(obj), env)
+        case select @ Select(qual, name) if (qual.symbol != null &&
+          qual.symbol != NoSymbol &&
+          qual.symbol.isPackage) =>
           (select, Top, env)
         // TODO Do we need this? think about it MORE
-        case select @ Select(ths @ This(n), name) =>  
+        case select @ Select(ths @ This(n), name) =>
           val tree = getMemberTree(ths.symbol.tpe, name, select.symbol.tpe)
-          if(tree.symbol.isVariable) {
+          if (tree.symbol.isVariable) {
             val (r, v, env2) = peval(tree, env)
             v match {
               case x: CTValue => (r, x, env2)
@@ -489,7 +489,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               case _ => (select, Top, env)
             }
           } else {
-        	(select, Top, env)
+            (select, Top, env)
           }
         // Unary operations
         case select @ Select(qual, name) if (isUnary(select)) =>
@@ -507,7 +507,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           }
         case select @ Select(qual, name) =>
           val (r1, v, env1) = peval(qual, env)
-          if(qual.symbol != null && qual.symbol != NoSymbol) {
+          if (qual.symbol != null && qual.symbol != NoSymbol) {
             digraph.getClassRepr(qual.symbol.owner.tpe) match {
               case Some(repr) =>
                 val member = repr.getMemberTree(name, select.symbol.tpe)
@@ -530,15 +530,16 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               x.foreach({
                 _ match {
                   case v: Ident =>
-                  	val value = env.getValue(v.symbol.name)
-                  	value match {
-                  		case CTValue(_) => fail("CT cannot live inside RT")
-                  		case _ =>
-                  	}
+                    val value = env.getValue(v.symbol.name)
+                    value match {
+                      case CTValue(_) => fail("CT cannot live inside RT")
+                      case _ =>
+                    }
                   case _ =>
-                }})
+                }
+              })
               peval(x, env)
-//              (r, Top, env2)
+            //              (r, Top, env2)
             case _ => fail("Should not happen")
           }
         case apply @ Apply(fun @ Select(r, l), args) if (isBinary(apply)) =>
@@ -566,134 +567,28 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
                 List(arg2)))
               (r, Top, env2)
           }
-        case apply @ Apply(fun, args) if (fun.symbol != NoSymbol && 
-        										fun.symbol.owner.isModule) =>
-          val reciever = fun.symbol.owner.tpe
-          val (pargs, pvals, env3) = pevalArgs(args, env)
-          val ctvals = pvals.filter(isCT(_))
-          digraph.getClassRepr(reciever) match {
-            case Some(clazz) =>
-//              val (_, _, env2) = peval(clazz.tree, new Environment)
-              val method = fun.symbol
-              val mtree = clazz.getMemberTree(method.name, method.tpe).asInstanceOf[DefDef]
-              val tmargs = mtree.vparamss.flatten
-              val cargs = getCTArgs(tmargs, pvals)
-              val margs = cargs.map(_.symbol.name.toTermName)
-              val menv = env.addValues(margs zip pvals)
-              if (isAllCT(pvals)) {
-                val (r, menv2) = feval(mtree.rhs, menv)
-                (r.v.tree, r, env)
-              } else if(hasCT(pvals)){val rargs = getRuntimeArgs(args, pvals)
-                val rparams = getRuntimeParams(tmargs, pvals)
-                val mname = clazz.getNextMethod(method.name, ctvals)
-                val (mbody, _, _) = peval(mtree.rhs, menv)
-                val tpe = MethodType(rparams.map(_.symbol), apply.tpe) 
-                
-                val untypedTree = clazz.hasMember(mname, tpe) match {
-                  case false =>
-                    val temp = DefDef(mtree.mods, mname, mtree.tparams, 
-                        List(rparams.asInstanceOf[List[ValDef]]), mtree.tpt, mbody)
-                    val symb = mtree.symbol.cloneSymbol(mtree.symbol.owner, 
-                					mtree.symbol.flags, mname)
-                	symb.setTypeSignature(tpe)
-//                	temp.tpe = tpe
-//                symb.name = sname
-                //untypedTree.tpe = MethodType(rparams.map(_.symbol),
-                	//	apply.symbol.tpe)
-                    temp.symbol = symb
-                    temp
-                  case true => clazz.getMemberTree(mname, tpe)
-                }
-                
-                val smtree = typeTree(untypedTree)
-                val modulep = clazz.hasMember(mname, tpe) match {
-                  case false => 
-                    val temp = typeTree(treeCopy.ModuleDef(clazz.tree, clazz.tree.mods,
-                    		clazz.tree.symbol.name,
-                    		treeCopy.Template(clazz.tree.impl,
-                    				clazz.tree.impl.parents,
-                    				clazz.tree.impl.self,
-                    				smtree :: clazz.tree.impl.body
-                    				))).asInstanceOf[ModuleDef]
-                    
-                    clazz.tree = temp
-                    temp
-                  case true => clazz.tree
-                }
-                val sapply = fun match {
-                  case Select(qual, name) =>
-                    typeTree(treeCopy.Apply(apply,
-                    		treeCopy.Select(fun, qual, mname), rargs))
-                  case _ => 
-                    typeTree(treeCopy.Apply(apply, Ident(mname), rargs))
-                }
-                (sapply, Top, env)
-              } else {
-                (apply, Top, env)
-              }
-            case None => noTreeApply(apply, env)
-          }
         case apply @ Apply(fun @ Select(qual @ Super(k, j), m), args) =>
-//          val tpe = qual.symbol.tpe
-//          digraph.getClassRepr(tpe) match {
-//            case Some(clazz) =>
-//              val rcvr = clazz.tree
-//              pevalApply(rcvr, Top, tpe, fun.symbol.name, apply, fun,
-//                (tmpt: Tree, newt: Tree, x: Name) => 
-//                  treeCopy.Select(tmpt, qual, x),
-//                  	args, env)
-//            case None => noTreeApply(apply, env) 
-//          }
+          //          val tpe = qual.symbol.tpe
+          //          digraph.getClassRepr(tpe) match {
+          //            case Some(clazz) =>
+          //              val rcvr = clazz.tree
+          //              pevalApply(rcvr, Top, tpe, fun.symbol.name, apply, fun,
+          //                (tmpt: Tree, newt: Tree, x: Name) => 
+          //                  treeCopy.Select(tmpt, qual, x),
+          //                  	args, env)
+          //            case None => noTreeApply(apply, env) 
+          //          }
           //TODO Think about this case more
           // Do we know who is our parent, during compilation time?
           // super.find() which find is called?
           (apply, Top, env)
-        case apply @ Apply(fun @ Select(qual @ This(ths), m), args) =>
-          def tcopy(tmpt: Tree, newt: Tree, x: Name): Tree = {
-            val t = Select(qual, x)
-//            val symbol = tmpt.symbol.cloneSymbol(tmpt.symbol.owner,
-//        				t.symbol.flags, x)
-//        	t.symbol = symbol
-//            t.tpe = tmpt.tpe
-            t
-          }
-          val tpe = qual.symbol.tpe
-          digraph.getClassRepr(tpe) match {
-            case Some(clazz) =>
-              val rcvr = clazz.tree
-              pevalApply(rcvr, Top, tpe, fun.symbol.name, apply, fun,
-                tcopy, args, env)
-            case None => 
-              noTreeApply(apply, env) 
-          }
-        case apply @ Apply(fun @ Select(obj @ Ident(_), m), args) =>
-          def tcopy(tmpt: Tree, newt: Tree, x: Name): Tree =  { 
-            val t = Select(newt, x)
-//            t.tpe = tmpt.tpe
-//            val symbol = tmpt.symbol.cloneSymbol(tmpt.symbol.owner,
-//        				t.symbol.flags, x)
-//        	t.symbol = symbol
-            t
-          }
-          val (nobj, nv, env2) = peval(obj, env)
-          pevalApply(nobj, nv, obj.symbol.tpe, m, apply, fun,
-            tcopy, args, env2)
-        case apply @ Apply(fun, args) =>
-          def tcopy(tmpt: Tree, newt: Tree, x: Name): Tree = {
-        	val t = Ident(x)
-//        	t.tpe = tmpt.tpe
-//        	val symbol = tmpt.symbol.cloneSymbol(tmpt.symbol.owner,
-//        				t.symbol.flags, x)
-//        	t.symbol = symbol
-        	t
-          }
+        case apply @ Apply(fun, args) => 
           val tpe = fun.symbol.owner.tpe
           digraph.getClassRepr(tpe) match {
             case Some(clazz) =>
               val rcvr = clazz.tree
-              val (rcvr2, nv, env2) = peval(rcvr, new Environment)
-              pevalApply(rcvr2, nv, tpe, fun.symbol.name, apply, fun,
-                tcopy,
+              val (_, nv, env2) = peval(fun, env)
+              pevalApply(rcvr, nv, tpe, fun.symbol.name, apply, fun,
                 args, env2)
             case None => noTreeApply(apply, env)
           }
@@ -706,19 +601,18 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       }
     }
 
-    private def noTreeApply(apply: Apply, env: Environment):
-    		(Tree, Value, Environment) = {
+    private def noTreeApply(apply: Apply, env: Environment): (Tree, Value, Environment) = {
       val tpe = apply.fun.symbol.owner.tpe
       val (pargs, vs, env2) = pevalArgs(apply.args, env)
-	  vs.filter(isCT(_)) match {
-	    case Nil =>
-	      val app = typeTree(treeCopy.Apply(apply, apply.fun, pargs))
-	      (app, Top, env2)
-	    case _ => 
-	      fail(s"${vs}\nTree not found for ${tpe} the " +
-	    		s"owner of ${apply.fun.symbol.name} " +
-	    		s"and the call is: ${apply}")
-	  }
+      vs.filter(isCT(_)) match {
+        case Nil =>
+          val app = typeTree(treeCopy.Apply(apply, apply.fun, pargs))
+          (app, Top, env2)
+        case _ =>
+          fail(s"${vs}\nTree not found for ${tpe} the " +
+            s"owner of ${apply.fun.symbol.name} " +
+            s"and the call is: ${apply}")
+      }
     }
     def isCT(v: Value) = !isNotCT(v)
     def isNotCT(v: Value) = {
@@ -736,7 +630,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       }
       temp.reverse
     }
-    
+
     private def getCTArgs(exprs: List[ValDef], values: List[Value]): List[ValDef] = {
 
       val pvTuple = values zip exprs
@@ -754,22 +648,99 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       rparams.reverse
     }
 
+    private def changeOwner(tree: Tree, oldSymb: Symbol, paramSyms: List[Symbol]) {
+      tree.foreach {
+        (x: Tree) =>
+          {
+            if (x.symbol != null && x.symbol != NoSymbol
+              && x.symbol.owner == oldSymb) {
+              val ns = findSymbol(x.symbol.name, x.symbol.tpe, paramSyms)
+              //                  ns.owner = symb
+              x.symbol = ns
+            }
+          }
+      }
+    }
+
+    private def findSymbol(name: Name, tpe: Type, paramSyms: List[Symbol]): Symbol = {
+      val r = for (
+        p <- paramSyms if (p.name == name && p.tpe =:= tpe)
+      ) yield {
+        p
+      }
+      r match {
+        case head :: Nil => head
+        case _ => fail(s"A problem has occured, there is more " +
+          s"than one variable with the same name (${name}) " +
+          s"and type (${tpe})")
+      }
+    }
+
     private def getSpecizlizedMethod(clazz: ClassRepr,
-      method: DefDef, args: List[Value], env: Environment,
-      name: TermName): (DefDef, Option[Environment]) = {
+      method: DefDef, args: List[Value], env: Environment, ret: Type): (DefDef, Environment) = {
       clazz.getSpecializedOption(method.symbol.name, args) match {
-        case Some(mtree) => (mtree, None)
+        case Some(mtree) => (mtree, env)
         case None =>
-          val rparams = getRuntimeParams(method.vparamss.flatten, args)
-          val (sptree, _, env2) = peval(method, env)
-          val mtree = sptree.asInstanceOf[DefDef]
-          val mname = name
-          val spmthd = typeTree(treeCopy.DefDef(mtree, mtree.mods,
-            mname, mtree.tparams,
-            List(rparams.map(_.asInstanceOf[ValDef])),
-            mtree.tpt, mtree.rhs)).asInstanceOf[DefDef]
-          clazz.addSpecialized(mname, args, spmthd)
-          (spmthd, Some(env2))
+          val clazzSymb = clazz.tree.symbol match {
+            case x: Symbol if (x.isModule) => x.moduleClass
+            case y => y
+          }
+          val ctvals = args.filter(isCT(_))
+          val tmargs = method.vparamss.flatten
+          val cargs = getCTArgs(tmargs, args)
+          val obody = method.rhs.duplicate
+          val rparams = getRuntimeParams(tmargs, args)
+          val sname = clazz.getNextMethod(method.symbol.name, ctvals)
+          val symb = clazzSymb.newMethod(sname, clazzSymb.pos.focus, method.symbol.flags)
+
+          val (mbody, _, _) = peval(obody, env)
+          val paramSyms = map2(rparams.map(_.symbol.tpe), rparams.map(_.symbol)) {
+            (tp, param) => symb.newSyntheticValueParam(tp, param.name)
+          }
+          val tpe = MethodType(paramSyms, ret)
+
+          val nrparams = for ((p, s) <- (rparams zip paramSyms)) yield {
+            s.setInfo(p.symbol.tpe)
+            ValDef(s, p.tpt)
+          }
+
+          if (clazzSymb.info.decls.lookup(symb.name) == NoSymbol) {
+            symb setInfoAndEnter tpe
+          } else {
+            symb setInfo tpe
+          }
+
+          changeOwner(mbody, method.symbol, paramSyms)
+
+          val tbody = localTyper.typedPos(symb.pos)(mbody)
+
+          val methDef = DefDef(symb, List(nrparams), tbody)
+
+          methDef.tpt setType localTyper.packedType(tbody, symb)
+          val mtree = typeTree(methDef).asInstanceOf[DefDef]
+
+          val temp = clazz.tree match {
+            case m: ModuleDef => typeTree {
+              treeCopy.ModuleDef(m, m.mods,
+                m.symbol.name,
+                treeCopy.Template(m.impl,
+                  m.impl.parents,
+                  m.impl.self,
+                  mtree :: m.impl.body))
+            }.asInstanceOf[ImplDef]
+            case c: ClassDef => typeTree {
+              treeCopy.ClassDef(c, c.mods,
+                c.symbol.name, c.tparams,
+                treeCopy.Template(c.impl,
+                  c.impl.parents,
+                  c.impl.self,
+                  mtree :: c.impl.body))
+            }.asInstanceOf[ImplDef]
+          }
+
+          clazz.addSpecialized(method.symbol.name, args, mtree)
+          clazz.tree = temp
+          (mtree, env.remove(cargs.map(_.symbol.name.toTermName)))
       }
     }
     private def getSpecializedClass(name: Ident, tpe: Type,
@@ -795,8 +766,8 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               val nimpl = clazz.tree match {
                 case clazztree: ClassDef =>
                   val template = treeCopy.Template(clazz.tree.impl,
-	                name :: clazz.tree.impl.parents,
-	                clazz.tree.impl.self, nbody)
+                    name :: clazz.tree.impl.parents,
+                    clazz.tree.impl.self, nbody)
                   val clazzToPeval = treeCopy.ClassDef(clazztree, clazztree.mods,
                     classBank.getNextClassName(clazztree.symbol.name),
                     clazztree.tparams, template)
@@ -811,14 +782,13 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               val csymbol = nimpl.symbol.asInstanceOf[ClassSymbol]
               val ownerSymb = csymbol.owner
               ownerSymb.newClass(csymbol.name.toTypeName,
-                  csymbol.pos, csymbol.flags)
+                csymbol.pos, csymbol.flags)
               nimpl
             case _ => fail("Could not find the AST node of the constructor")
           }
       }
     }
-    
-    
+
     private def hasCT(vs: List[Value]): Boolean = {
       vs match {
         case Nil => false
@@ -874,12 +844,10 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       list._1 zip list._2
     }
 
-    private def pevalApply(rcvr: Tree, 
+    private def pevalApply(rcvr: Tree,
       nv: Value, rcvrtpe: Type,
       m: Name, apply: Apply, fun: Tree,
-      tcopy: (Tree, Tree, Name) => Tree,
       args: List[Tree], env: Environment): (Tree, Value, Environment) = {
-//      val (nobj, nv, env2) = peval(rcvr, env)
       val (pargs, pvals, env3) = pevalArgs(args, env)
       val ctvals = pvals.filter(isCT(_))
       digraph.getClassRepr(rcvrtpe) match {
@@ -888,7 +856,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           val tmargs = mtree.vparamss.flatten
           val cargs = getCTArgs(tmargs, pvals)
           val margs = cargs.map(_.symbol.name.toTermName)
-          val menv = env.addValues(margs zip pvals)
+          val menv = env.addValues(margs zip ctvals)
           nv match {
             case x: CTValue =>
               if (isAllCT(pvals)) {
@@ -897,127 +865,93 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               } else {
                 val rargs = getRuntimeArgs(args, pvals)
                 val rparams = getRuntimeParams(tmargs, pvals)
-                
+
                 val module = getCompanionObject(rcvclass)
-                val moduleSymb = module.tree.symbol.moduleClass
-                val sname = module.getNextMethod(mtree.symbol.name, ctvals)
-//                val falgs = Flag..SYNTHETIC | 
-                val symb = moduleSymb.newMethod(sname, 
-                    moduleSymb.pos.focus, NoFlags)
-//               localTyper.context1.enclClass.owner = module.tree.symbol.moduleClass
-//                symb.setInfo(tpe)
-//                symb.owner = module.tree.symbol
-                
-                var tpe = MethodType(rparams.map(_.symbol), apply.tpe) 
-                
-                val hasMember = module.hasMember(name, tpe)
-                val staticm = hasMember match {
-                  case false =>
-//                    symb.setFlag(Flag.)
-                	
-                    val obody = mtree.rhs.duplicate
-                    val (mbody, _, _) = peval(obody, menv)
-//                    obody.symbol.owner = symb
-//                	val (mbody, _, _) = peval(obody, menv)
-                	val paramSyms = map2(rparams.map(_.symbol.tpe), rparams.map(_.symbol)) {
-		              (tp, param) => symb.newSyntheticValueParam(tp, param.name)
-		            }
-                    tpe = MethodType(paramSyms, apply.tpe)
-                    val nrparams = for((p, s) <- (rparams zip paramSyms)) yield {
-                	  s.setInfo(p.symbol.tpe)
-                      ValDef(s, p.tpt)
-                	}
-                    
-                    if(moduleSymb.info.decls.lookup(symb.name) == NoSymbol) {
-                      symb setInfoAndEnter tpe
-                    } else {
-                      symb setInfo tpe
-                    }
-                    def findSymbol(name: Name, tpe: Type): Symbol = {
-                      val r = for(p <- paramSyms if(p.name == name && p.tpe =:= tpe)) yield {
-                        p
-                      }
-                      r.head
-                    }
-                    
-                    mbody.foreach {
-                      (x: Tree) => {
-                        if(x.symbol!= null && x.symbol != NoSymbol
-                          && x.symbol.owner == mtree.symbol)  {
-                          val ns = findSymbol(x.symbol.name, x.symbol.tpe)
-                          ns.owner = symb
-                          x.symbol = ns
-                        }
-                      }
-                    }
+                val (specialized, renv) = getSpecizlizedMethod(module, mtree, pvals, menv, apply.tpe)
+                //                val moduleSymb = module.tree.symbol.moduleClass
+                //                val sname = module.getNextMethod(mtree.symbol.name, ctvals)
+                //                val symb = moduleSymb.newMethod(sname,
+                //                  moduleSymb.pos.focus, NoFlags)
+                //                var tpe = MethodType(rparams.map(_.symbol), apply.tpe)
+                //
+                //                val hasMember = module.hasMember(name, tpe)
+                //                val staticm = hasMember match {
+                //                  case false =>
+                //                    val obody = mtree.rhs.duplicate
+                //                    val (mbody, _, _) = peval(obody, menv)
+                //                    val paramSyms = map2(rparams.map(_.symbol.tpe), rparams.map(_.symbol)) {
+                //                      (tp, param) => symb.newSyntheticValueParam(tp, param.name)
+                //                    }
+                //                    tpe = MethodType(paramSyms, apply.tpe)
+                //                    val nrparams = for ((p, s) <- (rparams zip paramSyms)) yield {
+                //                      s.setInfo(p.symbol.tpe)
+                //                      ValDef(s, p.tpt)
+                //                    }
+                //
+                //                    if (moduleSymb.info.decls.lookup(symb.name) == NoSymbol) {
+                //                      symb setInfoAndEnter tpe
+                //                    } else {
+                //                      symb setInfo tpe
+                //                    }
+                //                    def findSymbol(name: Name, tpe: Type): Symbol = {
+                //                      val r = for (p <- paramSyms if (p.name == name && p.tpe =:= tpe)) yield {
+                //                        p
+                //                      }
+                //                      r.head
+                //                    }
+                //
+                //                    mbody.foreach {
+                //                      (x: Tree) =>
+                //                        {
+                //                          if (x.symbol != null && x.symbol != NoSymbol
+                //                            && x.symbol.owner == mtree.symbol) {
+                //                            val ns = findSymbol(x.symbol.name, x.symbol.tpe)
+                //                            ns.owner = symb
+                //                            x.symbol = ns
+                //                          }
+                //                        }
+                //                    }
+                //
+                //                    val tbody = localTyper.typedPos(symb.pos)(mbody)
+                //
+                //                    val methDef = DefDef(symb, List(nrparams), tbody)
+                //
+                //                    methDef.tpt setType localTyper.packedType(tbody, symb)
+                //                    typeTree(methDef)
+                //
+                //                  case true => module.getMemberTree(sname, tpe)
+                //                }
+                //
+                //                val modulep = hasMember match {
+                //                  case false =>
+                //                    val temp = localTyper.typedPos(fun.pos) {
+                //                      treeCopy.ModuleDef(module.tree, module.tree.mods,
+                //                        module.tree.symbol.name,
+                //                        treeCopy.Template(module.tree.impl,
+                //                          module.tree.impl.parents,
+                //                          module.tree.impl.self,
+                //                          staticm :: module.tree.impl.body))
+                //                    }.asInstanceOf[ModuleDef]
+                //                    module.tree = temp
+                //                    temp
+                //                  case true => module.tree
+                //                }
 
-                    
-                    
-                	
-                    val tbody = localTyper.typedPos(symb.pos)(mbody)
-                    
-                    val methDef = DefDef(symb, List(nrparams), tbody)
-                	
-                    methDef.tpt setType localTyper.packedType(tbody, symb)
-                    typeTree(methDef)
-                	
-                  case true => module.getMemberTree(sname, tpe)
-                }
-                
-                
-//                val (stree, _, env4) = peval(staticTree, menv)
-//                val staticm = staticTree
-                val modulep = hasMember match {
-                  case false => 
-                    val temp = localTyper.typedPos(fun.pos) {
-                      treeCopy.ModuleDef(module.tree, module.tree.mods,
-                    		module.tree.symbol.name,
-                    		treeCopy.Template(module.tree.impl,
-                    				module.tree.impl.parents,
-                    				module.tree.impl.self,
-                    				staticm :: module.tree.impl.body))
-                     }.asInstanceOf[ModuleDef]
-                    module.tree = temp
-                    temp
-                  case true => module.tree
-                }
+                val sapply = Apply(REF(module.tree.symbol) DOT specialized.symbol.name, rargs).setSymbol(specialized.symbol)
 
-                val sapplySym = staticm.symbol //apply.symbol.cloneSymbol(staticm.symbol.owner, apply.symbol.flags, sname)
-                
-//                sapplySym.setInfo(symb.info)
-                
-//                val thssymb = fun.symbol.cloneSymbol(apply.symbol.owner, 
-//                    fun.symbol.flags, modulep.symbol.name)
-//                thssymb.setInfo(modulep.symbol.info)
-                val ths = REF(modulep.symbol)
-                val sapply = Apply(ths DOT sname, rargs).setSymbol(sapplySym)
-                
-                
-//                  
-//                
-//                sapply.setSymbol = sapplySym
-////                sapply.symbol.owner = apply.symbol.owner
-//                sapply.symbol.name = sname
-//                sapply.tpe = tpe.resultType
-                
-//                sapply.symbol.setTypeSignature(tpe)
-//                val nsapply = typeTree(sapply)
-//                sapply.symbol = sapplySym
-                
-                
                 (typeTree(sapply), Top, env3)
               }
             case x: AbsValue =>
               if (hasCT(pvals)) {
                 val rargs = getRuntimeArgs(args, pvals)
                 val mname = rcvclass.getNextMethod(mtree.symbol.name, ctvals)
-                val (specialized, envr) = getSpecizlizedMethod(rcvclass, mtree, pvals, menv, mname)
-                val tapply = typeTree(treeCopy.Apply(apply,
-                  tcopy(fun, rcvr, mname), rargs))
-                (tapply, Top, env3)
+                val (specialized, envr) = getSpecizlizedMethod(rcvclass, mtree, pvals, menv, apply.tpe)
+                val sapply = Apply(rcvr DOT specialized.symbol.name, rargs).setSymbol(specialized.symbol)
+                val tapply = typeTree(sapply)
+                (tapply, Top, envr)
               } else {
                 val tapply = typeTree(treeCopy.Apply(apply,
-                  tcopy(fun, rcvr, fun.symbol.name), pargs))
+                  rcvr DOT fun.symbol.name, pargs))
                 (tapply, Top, env3)
               }
             case _ => // receiver is unknown
@@ -1026,17 +960,17 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
                 val clazzes = rcvclass :: digraph.getSubclasses(rcvclass)
                 val mname = rcvclass.getNextMethod(mtree.symbol.name, ctvals)
                 for (c <- clazzes) {
-                  val (specialized, envr) = getSpecizlizedMethod(c, mtree, pvals, menv, mname)
+                  val (specialized, envr) = getSpecizlizedMethod(c, mtree, pvals, menv, apply.tpe)
                 }
-                val tapply = typeTree(treeCopy.Apply(apply,
-                  tcopy(fun, rcvr, mname), rargs))
+                val mthd = rcvclass.getSpecialized(mname, pvals)
+                val tapply = typeTree(Apply(rcvr DOT mname, rargs).setSymbol(mthd.symbol))
                 (tapply, Top, env3)
               } else {
                 val tapply = typeTree(treeCopy.Apply(apply, fun, pargs))
                 (tapply, Top, env3)
               }
           }
-        case _ => 
+        case _ =>
           val tapply = typeTree(treeCopy.Apply(apply, fun, pargs))
           (tapply, Top, env3)
       }
@@ -1069,8 +1003,8 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               Nil)))
           val modrepr = new ClassRepr(module.tpe, module.asInstanceOf[ModuleDef])
           val symb = rcvclass.tree.symbol.asClass
-          symb.owner.newModule(module.symbol.name.toTypeName, module.symbol.pos, 
-              module.symbol.flags)
+          symb.owner.newModule(module.symbol.name.toTypeName, module.symbol.pos,
+            module.symbol.flags)
           digraph.addClass(modrepr)
           modrepr
         case Some(x) => x
@@ -1125,16 +1059,20 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
 
     private def isAnyConstructor(a: Apply): Boolean = {
       a.symbol.fullName == "java.lang.Object.<init>" ||
-    		  a.symbol.fullName == "scala.lang.Any.<init>"
+        a.symbol.fullName == "scala.lang.Any.<init>"
     }
 
     private def isUnary(select: Select): Boolean = {
-      val rcvr = select.symbol.owner.tpe
-      val c = isAnyVal(rcvr)
-      val methodName = select.symbol.name
-      if (c && isUop(methodName)) {
-        true
-      } else false
+      if (select.symbol == null || select.symbol == NoSymbol) {
+        false
+      } else {
+        val rcvr = select.symbol.owner.tpe
+        val c = isAnyVal(rcvr)
+        val methodName = select.symbol.name
+        if (c && isUop(methodName)) {
+          true
+        } else false
+      }
     }
 
     private def isBinary(apply: Apply): Boolean = {
@@ -1142,15 +1080,19 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
     }
     private def isBinary(apply: Apply, check: Boolean,
       f: TermName => Boolean): Boolean = {
-      val args = apply.args
-      val fun = apply.fun
-      val rcvr = fun.symbol.owner.tpe
-      val c = isAnyVal(rcvr)
-      val method = fun.symbol
-      val methodName = method.name
-      if (c && check && f(methodName)) {
-        true
-      } else false
+      if (apply.fun.symbol == null || apply.fun.symbol == NoSymbol) {
+        false
+      } else {
+        val args = apply.args
+        val fun = apply.fun
+        val rcvr = fun.symbol.owner.tpe
+        val c = isAnyVal(rcvr)
+        val method = fun.symbol
+        val methodName = method.name
+        if (c && check && f(methodName)) {
+          true
+        } else false
+      }
     }
 
     private def isAnyVal(tpe: Type) = {

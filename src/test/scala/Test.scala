@@ -17,7 +17,15 @@ object Test{
     val obj = CT(new Test)
     val j = 9
     val ll = j + obj.dd(CT("test"), 0)
-    println(ll)
+    val llk = obj.dd(CT("test"), 2)
+    
+    val aobj = new Test
+    val llb = j + aobj.dd(CT("test"), 0)
+    val lla = 11  + aobj.dd("test", 2 + 3)
+    
+    val bobj = RT(new Test)
+    val lld = bobj.dd(CT("test"), 0)
+    println(ll + "  " + llk + "   " + lla + "  " + llb + "  " + lld)
   }
 }
 
