@@ -14,6 +14,7 @@ import scala.reflect.runtime.universe._
 import scala.tools.nsc.symtab.Flags._
 import scala.language.implicitConversions
 import ch.usi.inf.l3.mina._
+import scala.reflect.internal.ModifierFlags
 
 class HPESpecializer(val hpe: HPE) extends PluginComponent
   with Transform
@@ -65,16 +66,16 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       tree match {
         case v: Literal => (CTValue(HPELiteral(v, v.tpe)), env)
         case v: Ident =>
-          env.getValue(v.symbol.name) match {
+          env.getValue(v.symbol) match {
             case x: CTValue => (x, env)
             case _ => fail(fevalError + " ident " + v)
           }
         case v @ ValDef(mods, name, tpt, rhs) =>
           val (r, env2) = feval(rhs, env)
-          (r, env2.addValue(v.symbol.name, r))
+          (r, env2.addValue(v.symbol, r))
         case Assign(lhs, rhs) =>
           val (rhs1, env1) = feval(rhs, env)
-          (rhs1, env.addValue(lhs.symbol.name, rhs1))
+          (rhs1, env.addValue(lhs.symbol, rhs1))
         case Block(stats, expr) =>
           var env2 = env
           var tail = stats
@@ -158,7 +159,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               mtree match {
                 case methodTree: DefDef =>
                   val (fevaledArgs, env1) = fevalArgs(args, env)
-                  val params = methodTree.vparamss.flatten.map(_.symbol.name.toTermName)
+                  val params = methodTree.vparamss.flatten.map(_.symbol)
                   val funStore = Environment((params, fevaledArgs))
                   val (v, env2) = feval(methodTree.rhs, funStore)
                   val obj = HPEObject(cnstrct, clazz.tpe, env2)
@@ -267,15 +268,15 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         case clazz: ImplDef =>
           var newEnv = Environment.empty
           var tail = clazz.impl.body
-          var nbody: List[Tree] = Nil
+          //          var nbody: List[Tree] = Nil
           while (tail != Nil) {
             val head = tail.head
             val (pevaled, _, env2) = peval(head, newEnv)
             newEnv = env2
-            nbody = pevaled :: nbody
+            //            nbody = pevaled :: nbody
             tail = tail.tail
           }
-          nbody = nbody.reverse
+          //          nbody = nbody.reverse
 
           //          val newClazz = clazz match {
           //            case ClassDef(mods, name, tparams, impl) =>
@@ -308,7 +309,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         case v: Literal =>
           (v, AbsValue(HPELiteral(v, v.tpe)), env)
         case v: Ident =>
-          val value = env.getValue(v.symbol.name)
+          val value = env.getValue(v.symbol)
           val t: Tree = value match {
             case CTValue(_) => value.value
             case _ => v
@@ -320,21 +321,21 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           val (rtree, r, env2) = peval(rhs, env)
           r match {
             case CTValue(_) =>
-              (EmptyTree, r, env2.addValue(v.symbol.name, r))
+              (EmptyTree, r, env2.addValue(v.symbol, r))
             case _ =>
               val treeToCopy = typeTree(treeCopy.ValDef(v, mods, name, tpt, rtree))
-              (treeToCopy, r, env2.addValue(v.symbol.name, r))
+              (treeToCopy, r, env2.addValue(v.symbol, r))
           }
         case a @ Assign(lhs, rhs) =>
-          env.getValue(lhs.symbol.name) match {
+          env.getValue(lhs.symbol) match {
             case CTValue(_) =>
               val (r, env1) = feval(rhs, env)
-              val env2 = env1.addValue(lhs.symbol.name, r)
+              val env2 = env1.addValue(lhs.symbol, r)
               val assgn = typeTree(treeCopy.Assign(a, lhs, r.v.tree))
               (r.v.tree, r, env2)
             case AbsValue(_) =>
               val (rtree, rhs1, env1) = peval(rhs, env)
-              val env2 = env1.addValue(lhs.symbol.name, rhs1)
+              val env2 = env1.addValue(lhs.symbol, rhs1)
               val assgn = typeTree(treeCopy.Assign(a, lhs, rtree))
               (assgn, rhs1, env2)
             case Top =>
@@ -343,7 +344,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               (assgn, Top, env1)
             case Bottom =>
               val (rtree, rhs1, env1) = peval(rhs, env)
-              val env2 = env1.addValue(lhs.symbol.name, rhs1)
+              val env2 = env1.addValue(lhs.symbol, rhs1)
               rhs1 match {
                 case CTValue(x) =>
                   (x.tree, rhs1, env2)
@@ -507,15 +508,22 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           }
         case select @ Select(qual, name) =>
           val (r1, v, env1) = peval(qual, env)
-          if (qual.symbol != null && qual.symbol != NoSymbol) {
-            digraph.getClassRepr(qual.symbol.owner.tpe) match {
+          if (qual.symbol != null && qual.symbol != NoSymbol &&
+              select.symbol != null && select.symbol != NoSymbol) {
+            digraph.getClassRepr(select.symbol.owner.tpe) match {
               case Some(repr) =>
                 val member = repr.getMemberTree(name, select.symbol.tpe)
-                v.value match {
+                val (res, vl, envr) = v.value match {
                   case Some(HPEObject(tree, _, store)) =>
                     peval(member, store)
                   case _ =>
                     peval(member, env1)
+                }
+                vl match {
+                  case x: CTValue => (res, vl, envr)
+                  case _ =>
+                    val ts = treeCopy.Select(select, r1, name)
+                    (ts, Top, envr)
                 }
               case None =>
                 (select, Top, env1)
@@ -530,7 +538,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               x.foreach({
                 _ match {
                   case v: Ident =>
-                    val value = env.getValue(v.symbol.name)
+                    val value = env.getValue(v.symbol)
                     value match {
                       case CTValue(_) => fail("CT cannot live inside RT")
                       case _ =>
@@ -546,7 +554,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           val arg1 = apply.args.head
           val (r1, v1, env1) = peval(r, env)
           val (arg2, v2, env2) = peval(arg1, env1)
-
+          
           val method = fun.symbol
           val methodName = method.name
           (v1, v2) match {
@@ -563,8 +571,8 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               val (r, env3) = doBop(methodName, x.toCTValue, y.toCTValue, env)
               (r.toTree, r, env3)
             case _ =>
-              val r = typeTree(treeCopy.Apply(apply, treeCopy.Select(fun, r1, l),
-                List(arg2)))
+              val rr = treeCopy.Select(fun, r1, l)
+              val r = typeTree(treeCopy.Apply(apply, rr, List(arg2)))
               (r, Top, env2)
           }
         case apply @ Apply(fun @ Select(qual @ Super(k, j), m), args) =>
@@ -582,13 +590,18 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           // Do we know who is our parent, during compilation time?
           // super.find() which find is called?
           (apply, Top, env)
-        case apply @ Apply(fun, args) => 
+        case apply @ Apply(fun, args) =>
           val tpe = fun.symbol.owner.tpe
           digraph.getClassRepr(tpe) match {
             case Some(clazz) =>
               val rcvr = clazz.tree
-              val (_, nv, env2) = peval(fun, env)
-              pevalApply(rcvr, nv, tpe, fun.symbol.name, apply, fun,
+
+              val (obj, nv, env2) = fun match {
+                case Select(This(c), m) => (This(c), Top, env)
+                case Select(qual, m) => peval(qual, env)
+                case m => peval(m, env)
+              }
+              pevalApply(obj, nv, tpe, fun.symbol.name, apply, fun,
                 args, env2)
             case None => noTreeApply(apply, env)
           }
@@ -677,8 +690,9 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
     }
 
     private def getSpecizlizedMethod(clazz: ClassRepr,
-      method: DefDef, args: List[Value], env: Environment, ret: Type): (DefDef, Environment) = {
-      clazz.getSpecializedOption(method.symbol.name, args) match {
+      method: DefDef, args: List[Value], 
+      	ctnames: List[Name], env: Environment, ret: Type): (DefDef, Environment) = {
+      clazz.getSpecializedOption(method.symbol.name, ctnames, args) match {
         case Some(mtree) => (mtree, env)
         case None =>
           val clazzSymb = clazz.tree.symbol match {
@@ -690,7 +704,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           val cargs = getCTArgs(tmargs, args)
           val obody = method.rhs.duplicate
           val rparams = getRuntimeParams(tmargs, args)
-          val sname = clazz.getNextMethod(method.symbol.name, ctvals)
+          val sname = clazz.getNextMethod(method.symbol.name, ctnames, ctvals)
           val symb = clazzSymb.newMethod(sname, clazzSymb.pos.focus, method.symbol.flags)
 
           val (mbody, _, _) = peval(obody, env)
@@ -738,9 +752,9 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
             }.asInstanceOf[ImplDef]
           }
 
-          clazz.addSpecialized(method.symbol.name, args, mtree)
+          clazz.addSpecialized(method.symbol.name, ctnames, args, mtree)
           clazz.tree = temp
-          (mtree, env.remove(cargs.map(_.symbol.name.toTermName)))
+          (mtree, env.remove(cargs.map(_.symbol)))
       }
     }
     private def getSpecializedClass(name: Ident, tpe: Type,
@@ -753,7 +767,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           clazz.getMemberTree(nme.CONSTRUCTOR, MethodType(tpes, tpe)) match {
             case mtree: DefDef =>
               val clazzArgs = getRuntimeParams(args, vals)
-              val argNames = mtree.vparamss.flatten.map(_.symbol.name.toTermName)
+              val argNames = mtree.vparamss.flatten.map(_.symbol)
               val env = Environment(argNames zip vals)
               val (nconst, _, cenv) = peval(mtree, env)
               val nbody = nconst :: {
@@ -849,14 +863,15 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       m: Name, apply: Apply, fun: Tree,
       args: List[Tree], env: Environment): (Tree, Value, Environment) = {
       val (pargs, pvals, env3) = pevalArgs(args, env)
-      val ctvals = pvals.filter(isCT(_))
       digraph.getClassRepr(rcvrtpe) match {
         case Some(rcvclass) =>
           val mtree = rcvclass.getMemberTree(m, apply.symbol.tpe).asInstanceOf[DefDef]
           val tmargs = mtree.vparamss.flatten
           val cargs = getCTArgs(tmargs, pvals)
-          val margs = cargs.map(_.symbol.name.toTermName)
+          val margs = cargs.map(_.symbol)
+          val ctvals = pvals.filter(isCT(_))
           val menv = env.addValues(margs zip ctvals)
+          val ctnames = cargs.map(_.symbol.name)
           nv match {
             case x: CTValue =>
               if (isAllCT(pvals)) {
@@ -867,7 +882,8 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
                 val rparams = getRuntimeParams(tmargs, pvals)
 
                 val module = getCompanionObject(rcvclass)
-                val (specialized, renv) = getSpecizlizedMethod(module, mtree, pvals, menv, apply.tpe)
+
+                val (specialized, renv) = getSpecizlizedMethod(module, mtree, pvals, ctnames, menv, apply.tpe)
                 //                val moduleSymb = module.tree.symbol.moduleClass
                 //                val sname = module.getNextMethod(mtree.symbol.name, ctvals)
                 //                val symb = moduleSymb.newMethod(sname,
@@ -938,31 +954,31 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
                 //                }
 
                 val sapply = Apply(REF(module.tree.symbol) DOT specialized.symbol.name, rargs).setSymbol(specialized.symbol)
-
                 (typeTree(sapply), Top, env3)
               }
             case x: AbsValue =>
               if (hasCT(pvals)) {
                 val rargs = getRuntimeArgs(args, pvals)
-                val mname = rcvclass.getNextMethod(mtree.symbol.name, ctvals)
-                val (specialized, envr) = getSpecizlizedMethod(rcvclass, mtree, pvals, menv, apply.tpe)
+                val mname = rcvclass.getNextMethod(mtree.symbol.name, ctnames, ctvals)
+                val (specialized, envr) = getSpecizlizedMethod(rcvclass, mtree, pvals, ctnames, menv, apply.tpe)
                 val sapply = Apply(rcvr DOT specialized.symbol.name, rargs).setSymbol(specialized.symbol)
                 val tapply = typeTree(sapply)
                 (tapply, Top, envr)
               } else {
+
                 val tapply = typeTree(treeCopy.Apply(apply,
-                  rcvr DOT fun.symbol.name, pargs))
+                  apply.fun, pargs))
                 (tapply, Top, env3)
               }
             case _ => // receiver is unknown
               if (hasCT(pvals) && closed) {
                 val rargs = getRuntimeArgs(args, pvals)
                 val clazzes = rcvclass :: digraph.getSubclasses(rcvclass)
-                val mname = rcvclass.getNextMethod(mtree.symbol.name, ctvals)
+                val mname = rcvclass.getNextMethod(mtree.symbol.name, ctnames, ctvals)
                 for (c <- clazzes) {
-                  val (specialized, envr) = getSpecizlizedMethod(c, mtree, pvals, menv, apply.tpe)
+                  val (specialized, envr) = getSpecizlizedMethod(c, mtree, pvals, ctnames, menv, apply.tpe)
                 }
-                val mthd = rcvclass.getSpecialized(mname, pvals)
+                val mthd = rcvclass.getSpecialized(mname, ctnames, pvals)
                 val tapply = typeTree(Apply(rcvr DOT mname, rargs).setSymbol(mthd.symbol))
                 (tapply, Top, env3)
               } else {
@@ -982,7 +998,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
         case Some(clazz) =>
           val mtree = tree2Method(clazz.getMemberTree(method.name, method.tpe))
           val (fevaledArgs, env1) = fevalArgs(args, env)
-          val params = mtree.vparamss.flatten.map(_.symbol.name.toTermName)
+          val params = mtree.vparamss.flatten.map(_.symbol)
           val funStore = Environment((params, fevaledArgs))
           val (v, _) = feval(mtree.rhs, funStore)
           (v, env1)
@@ -990,22 +1006,95 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           fail(fevalError)
       }
     }
+
     private def getCompanionObject(rcvclass: ClassRepr): ClassRepr = {
       digraph.findCompanionModule(rcvclass.tree.symbol) match {
         case None =>
-          val modname = rcvclass.tree.symbol.name
-          //    	            val temp = typeTree(reify{object Temp {}}.tree).asInstanceOf[ModuleDef]
-          //    	            val module = typeTree(treeCopy.ModuleDef(temp, 
-          //    	            		temp.mods, modname, temp.impl)).asInstanceOf[ModuleDef]
-          val module = typeTree(ModuleDef(rcvclass.tree.mods,
-            modname, Template(rcvclass.tree.impl.parents,
-              rcvclass.tree.impl.self,
-              Nil)))
-          val modrepr = new ClassRepr(module.tpe, module.asInstanceOf[ModuleDef])
-          val symb = rcvclass.tree.symbol.asClass
-          symb.owner.newModule(module.symbol.name.toTypeName, module.symbol.pos,
-            module.symbol.flags)
+          val csymbol = rcvclass.tree.symbol.asInstanceOf[ClassSymbol]
+          
+          val modname = csymbol.name
+          val owner = csymbol.owner
+          val symb = csymbol.newModule(modname.toTermName,
+              csymbol.pos.focus, MODULE)
+          val msymb = symb.moduleClass
+          symb.owner = owner
+          msymb.owner = owner
+//          csymbol.sourceModule = symb
+//          symb.setModuleClass(csymbol)
+          //owner.newModuleSymbol(modname, owner.pos.focus, MODULE)
+          //          symb.setInfo(info)
+          val parents = rcvclass.tree.impl.parents
+          val tparents = parents.map(_.tpe)
+          
+          
+          
+          val mtpe = ClassInfoType(tparents, newScope, msymb)
+          
+//          
+          
+//          val vsym = symb.newValue(modname.toTermName, symb.pos.pos, LOCAL)
+          
+          
+//          def mkforArrayOf(owner: Symbol): DefDef = {
+//            val name = newTermName(nme.CONSTRUCTOR)
+//            val s = owner.newMethod(name)
+//            s setInfo MethodType(Nil, mtpe)
+//            val body = mkFactoryClass(arrayTpe, s, nest-1)
+//            DefDef(Modifiers(FINAL), name, Nil, Nil, TypeTree(arrayFactoryTpe), body) setSymbol s
+//          }
+          
+//          val mtpe = ClassInfoType(rcvclass.tree.impl.parents.map(_.tpe), 
+//              newScope, msymb)
+          
+          msymb setInfo mtpe
+          symb setInfoAndEnter msymb.tpe
+          
+//          val b = definitions.
+          
+//          if (owner.info.decls.lookup(symb.name) == NoSymbol) {
+//            msymb setInfoAndEnter(mtpe)
+//            symb setInfoAndEnter(mtpe)
+//          } else {
+//        	msymb setInfo mtpe
+//        	symb setInfo(mtpe)
+//          }
+//          
+//          vsym setInfo msymb.tpe
+//          
+//          val vdef = ValDef(vsym, EmptyTree)
+          
+//          if (symb.info.decls.lookup(csymb.name) == NoSymbol) {
+//            csymb setInfoAndEnter (MethodType(Nil, symb.tpe))
+//          } else {
+//            csymb setInfo (MethodType(Nil, symb.tpe))
+//          }
+////          
+//        
+          
+          val csymb = msymb.newClassConstructor(symb.pos.focus)
+          csymb setInfoAndEnter (MethodType(Nil, symb.info))
+          
+//          if (msymb.info.decls.lookup(csymb.name) == NoSymbol) {
+//            csymb setInfoAndEnter (MethodType(Nil, msymb.info))
+//          } else {
+//            csymb setInfo (MethodType(Nil, msymb.info))
+//          }
+//          val qual = This(symb)
+          val spr = Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR)
+          val sapply = Apply(spr, Nil)
+          val cnsrct = DefDef(csymb, List(Nil), 
+              Block(List(sapply), Literal(Constant(()))))
+//          
+          
+          val module = ModuleDef(symb, Template(parents,
+              emptyValDef,
+              List(cnsrct)))
+//          val cleanedUp = resetLocalAttrs(module)
+          
+          val tmodule = typeTree(module).asInstanceOf[ModuleDef]
+          val modrepr = new ClassRepr(tmodule.symbol.tpe, tmodule)
           digraph.addClass(modrepr)
+          digraph.addCompanion(rcvclass.tree.tpe, modrepr)
           modrepr
         case Some(x) => x
       }
@@ -1235,7 +1324,8 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
 
     private def getMemberTree(tpe1: Type, m: Name, mType: Type): Tree = {
       digraph.getClassRepr(tpe1) match {
-        case Some(repr) => repr.getMemberTree(m, mType)
+        case Some(repr) => 
+          repr.getMemberTree(m, mType)
         case None => fail(s"Could not find class ${tpe1}")
       }
     }

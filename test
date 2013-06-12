@@ -135,10 +135,14 @@ if(!testAll) {
   
   // First compile it with the plugin
   val testFile = s"${testBase}${sp}${file}.scala"
-  s"scalac -d ${testDest} -cp ${mina} -Xplugin:${mina} ${testFile}" run(pio) exitValue
+  val dst1 = s"${testDest}${sp}${file.toLowerCase}"
+  new File(dst1).mkdirs
+  s"scalac -d ${dst1} -cp ${mina} -Xplugin:${mina} ${testFile}" run(pio) exitValue
 
   // Then compile it without the plugin
-  s"scalac -d ${plainDest} -cp ${mina} ${testFile}" run(pio) exitValue
+  val dst2 = s"${plainDest}${sp}${file.toLowerCase}"
+  new File(dst2).mkdirs
+  s"scalac -d ${dst2} -cp ${mina} ${testFile}" run(pio) exitValue
 } else if(testAll) {
   println("===========================")
   println("  Compiling all test cases ")
@@ -153,10 +157,15 @@ if(!testAll) {
 
     // First compile it with the plugin
     val testFile = s"${testBase}${sp}${tst}"
-    s"scalac -d ${testDest} -cp ${mina} -Xplugin:${mina} ${testFile}" run(pio) exitValue
+    val dst1 = s"${testDest}${sp}${file.toLowerCase}"
+    new File(dst1).mkdirs
+    s"scalac -d ${dst1} -cp ${mina} -Xplugin:${mina} ${testFile}" run(pio) exitValue
 
+
+    val dst2 = s"${plainDest}${sp}${file.toLowerCase}"
+    new File(dst2).mkdirs
     // Then compile it without the plugin
-    s"scalac -d ${plainDest} -cp ${mina} ${testFile}" run(pio) exitValue
+    s"scalac -d ${dst2} -cp ${mina} ${testFile}" run(pio) exitValue
   }
 }
 
@@ -166,10 +175,10 @@ if(!testAll && run) {
   println("===========================")
   // Run the file once wihtout applying HPE
   
-  s"scala -cp ${plainDest}:${mina} ${file}" run(pio) exitValue
+  s"scala -cp ${plainDest}${sp}${file.toLowerCase}:${mina} ${file}" run(pio) exitValue
   
   // Run the same file this time with applying HPE
-  s"scala -cp ${testDest}:${mina} ${file}" run(pio) exitValue
+  s"scala -cp ${testDest}${sp}${file.toLowerCase}:${mina} ${file}" run(pio) exitValue
 } else if(testAll && run) {
   println("===========================")
   println("  Running all test cases   ")
@@ -183,10 +192,10 @@ if(!testAll && run) {
     println("==========================================")
     val test = tst.replaceAll("[\\.]scala", "")
     // Run the file once wihtout applying HPE
-    s"scala -cp ${plainDest}:${mina} ${test}" run(pio) exitValue
+    s"scala -cp ${plainDest}${sp}${file.toLowerCase}:${mina} ${test}" run(pio) exitValue
   
     // Run the same file this time with applying HPE
-    s"scala -cp ${testDest}:${mina} ${test}" run(pio) exitValue
+    s"scala -cp ${testDest}${sp}${file.toLowerCase}:${mina} ${test}" run(pio) exitValue
   }
 }
 

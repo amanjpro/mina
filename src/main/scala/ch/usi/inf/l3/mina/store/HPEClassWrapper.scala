@@ -18,11 +18,13 @@ private[mina] trait HPEClassWrapper {
    * for (objects)
    */
   class ClassRepr(val tpe: Type, private var classTree: ImplDef = null) {
-    private var specialized: Map[(Name, List[Value]), DefDef] = Map.empty 
-    def getNextMethod(base: TermName, values: List[Value]) = {
+    private var specialized: Map[TermName, DefDef] = Map.empty 
+    def getNextMethod(base: TermName, ctargs: List[Name], values: List[Value]) = {
       var tail = values.toString.replaceAll("[\\[\\]]", "")
       tail = values.toString.replaceAll("[\\(\\)]", "")
-      val name = base.toString + "_m$_i$_"  + tail + "_n$_a$"
+      var avails = ctargs.toString.replaceAll("[\\[\\]]", "")
+      avails = ctargs.toString.replaceAll("[\\(\\)]", "")
+      val name = base.toString + "_m$_i$_"  + tail + "_" + avails+ "_n$_a$"
       newTermName(name)
     }
 
@@ -60,7 +62,8 @@ private[mina] trait HPEClassWrapper {
 
     override def equals(that: Any): Boolean = {
       that match {
-        case x: ClassRepr => tpe == x.tpe
+        case null => false
+        case x: ClassRepr => tpe =:= x.tpe
         case _ => false
       }
     }
@@ -92,20 +95,20 @@ private[mina] trait HPEClassWrapper {
       temp.reverse
     }
 
-    def addSpecialized(name: Name, args: List[Value], method: DefDef) = {
-      specialized = specialized + ((name, nullify(args)) -> method)
+    def addSpecialized(name: Name, ctargs: List[Name], args: List[Value], method: DefDef) = {
+      specialized = specialized + (getNextMethod(name, ctargs, nullify(args)) -> method)
     }
 
-    def getSpecialized(name: Name, args: List[Value]): DefDef = {
-      specialized((name, nullify(args)))
+    def getSpecialized(name: Name, ctargs: List[Name], args: List[Value]): DefDef = {
+      specialized(getNextMethod(name, ctargs, nullify(args)))
     }
 
-    def getSpecializedOption(name: Name, args: List[Value]): Option[DefDef] = {
-      specialized.get((name, nullify(args)))
+    def getSpecializedOption(name: Name, ctargs: List[Name], args: List[Value]): Option[DefDef] = {
+      specialized.get(getNextMethod(name, ctargs, nullify(args)))
     }
 
-    def hasSpecialized(name: Name, args: List[Value]): Boolean = {
-      getSpecializedOption(name, args) match {
+    def hasSpecialized(name: Name, ctargs: List[Name], args: List[Value]): Boolean = {
+      getSpecializedOption(name, ctargs, args) match {
         case Some(x) => true
         case None => false
       }
@@ -117,7 +120,7 @@ private[mina] trait HPEClassWrapper {
   
   class ClassBank {
     private var nextClassID = 0
-
+    
     
     private var speciazlized: Map[(Type, List[Value]), ClassRepr] = Map.empty
     private var allMorphs: Map[Type, List[ImplDef]] = Map.empty
@@ -169,11 +172,28 @@ private[mina] trait HPEClassWrapper {
 
   class ClassDigraph {
     type C = ClassRepr
+    
+    private var companionMap: Map[Type, ClassRepr] = Map.empty
     private var index = 0
     private var nodes = Map.empty[C, Int]
     private var reversed = Map.empty[Int, C]
     private var edges = Map.empty[Int, List[Int]]
 
+    def getCompanionRepr(tpe: Type): List[ClassRepr] = {
+      companionMap.get(tpe) match {
+        case Some(c) => List(c)
+        case _ => Nil
+      }
+    }
+    def getCompanion(tpe: Type): List[ImplDef] = {
+      companionMap.get(tpe) match {
+        case Some(c) => List(c.tree)
+        case _ => Nil
+      }
+    }
+    def addCompanion(tpe: Type, module: ClassRepr): Unit = {
+      companionMap = companionMap + (tpe -> module)
+    }
     def findCompanionModule(clazz: Symbol): Option[C] = {
       if(clazz.isModule) {
         getClassRepr(clazz.tpe)
@@ -182,7 +202,12 @@ private[mina] trait HPEClassWrapper {
         if(mod != NoSymbol) {
           getClassRepr(mod.tpe)
         }
-        else None
+        else {
+          getCompanionRepr(clazz.tpe) match {
+            case x :: Nil => Some(x)
+            case _ => None
+          }
+        }
       }
 //      var r: Option[C] = None
 //      var tail = nodes.keys.toList

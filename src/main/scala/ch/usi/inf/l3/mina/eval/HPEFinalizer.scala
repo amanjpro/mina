@@ -51,6 +51,7 @@ class HPEFinalizer(val hpe: HPE) extends PluginComponent
       val t: Tree = tree match {
         case pkg @ PackageDef(pkname, stats) =>
           val morphs = for (stat <- stats) yield {
+            
             stat match {
               case x: ImplDef =>
                 val tree = digraph.getClassRepr(x.symbol.tpe) match {
@@ -90,10 +91,21 @@ class HPEFinalizer(val hpe: HPE) extends PluginComponent
 //                    typeTree(r)
                   case None => x
                 }
-                tree :: classBank.getAllMorphs(x.tpe)
+                val classes = tree :: classBank.getAllMorphs(x.tpe) 
+                val comp = digraph.getCompanion(stat.tpe)
+                comp match {
+                  case Nil => classes
+                  case x :: _ => 
+                     classes.contains(comp) match {
+	                   case true => classes
+	                   case _ => classes ++ comp
+	                 }
+                }
+               
 
               case x => List(x)
             }
+            
           }
 //          val pkgsymb = pkg.symbol
           val flatMorphs = morphs.flatten

@@ -14,7 +14,7 @@ trait HPEEnvironmentWrapper {
 
   // ---------------------- Environment ---------------------------------------
   
-  class Environment private (private val location: Map[TermName, Int],
+  class Environment private (private val location: Map[Symbol, Int],
     private val store: Map[Int, Value],
     private val loc: Int) {
 
@@ -22,15 +22,17 @@ trait HPEEnvironmentWrapper {
       this(Map.empty, Map.empty, -1)
     }
 
-    def getValue(v: TermName): Value = {
-      location.get(v) match {
+    def getValue(s: Symbol): Value = {
+      if(s == null || s == NoSymbol) 
+        throw new HPEError(s"Symbol should not be null or NoSymbol ${s}")
+      location.get(s) match {
         case None => Bottom
         case Some(x) => store(x)
       }
     }
 
 
-    def addValues(valvars: List[(TermName, Value)]): Environment = {
+    def addValues(valvars: List[(Symbol, Value)]): Environment = {
       var env = this
       var tail = valvars
       while(tail != Nil){
@@ -40,10 +42,12 @@ trait HPEEnvironmentWrapper {
       }
       env
     }
-    def updateValue(v: TermName, value: Value): Environment = {
-      location.get(v) match {
+    def updateValue(s: Symbol, value: Value): Environment = {
+      if(s == null || s == NoSymbol) 
+        throw new HPEError(s"Symbol should not be null or NoSymbol ${s}")
+      location.get(s) match {
         case None =>
-          addValue(v, value)
+          addValue(s, value)
         case Some(l) =>
           val old = store(l) 
           old match {
@@ -56,11 +60,13 @@ trait HPEEnvironmentWrapper {
           
       }
     }
-    def addValue(v: TermName, value: Value): Environment = {
+    def addValue(s: Symbol, value: Value): Environment = {
+      if(s == null || s == NoSymbol) 
+        throw new HPEError(s"Symbol should not be null or NoSymbol ${s}")
       val l = loc + 1
-      val m = location + (v -> l)
-      val s = store + (l -> value)
-      new Environment(m, s, l)
+      val m = location + (s -> l) //location + (s -> l)
+      val st = store + (l -> value)
+      new Environment(m, st, l)
     }
     private def makeConsistent(x: Environment, y: Environment): Environment = {
       var r = this
@@ -100,7 +106,7 @@ trait HPEEnvironmentWrapper {
      * @param sourse the source environment, to look for variables values from
      * @return a new environment which has all the information of its parameters
      */
-    def addBatch(vars: List[TermName],
+    def addBatch(vars: List[Symbol],
       source: Environment): Environment = {
       var tail = vars
       var tempStore = this
@@ -121,15 +127,15 @@ trait HPEEnvironmentWrapper {
     /**
      * Removes a variable from the environment
      *
-     * @param v the variable to be removed
+     * @param s the variable to be removed
      * @return a new environment, which has the bindings of variable v removed
      */
-    def remove(v: TermName): Environment = {
-      val location2 = location - (v)
+    def remove(s: Symbol): Environment = {
+      val location2 = location - (s)
       new Environment(location2, store, loc)
     }
     
-    def remove(vars: List[TermName]): Environment = {
+    def remove(vars: List[Symbol]): Environment = {
       var tail = vars
       var tempStore = this
       while(tail != Nil) {
@@ -140,22 +146,22 @@ trait HPEEnvironmentWrapper {
       tempStore
     }
 
-    private def getPEValue(v: TermName): Option[Value] = {
-      location.get(v) match {
+    private def getPEValue(s: Symbol): Option[Value] = {
+      location.get(s) match {
         case Some(loc) => store.get(loc)
         case _ => None
       }
     }
 
-    def isCT(v: TermName): Boolean = {
-      getPEValue(v) match {
+    def isCT(s: Symbol): Boolean = {
+      getPEValue(s) match {
         case Some(CTValue(_)) => true
         case _ => false
       }
     }
 
-    def isRT(v: TermName): Boolean = {
-      getPEValue(v) match {
+    def isRT(s: Symbol): Boolean = {
+      getPEValue(s) match {
         case Some(Top) => true
         case _ => false
       }
@@ -166,10 +172,13 @@ trait HPEEnvironmentWrapper {
   
   object Environment {
     def empty: Environment = { new Environment }
-    def apply(varval: List[(TermName, Value)]): Environment = {
+    def apply(varval: List[(Symbol, Value)]): Environment = {
       newStore(varval)
     }
-    def newStore(varval: List[(TermName, Value)]): Environment = {
+    def apply(varval: (List[Symbol], List[Value])): Environment = {
+      newStore(varval._1 zip varval._2)
+    }
+    def newStore(varval: List[(Symbol, Value)]): Environment = {
       var env = new Environment
       var tail = varval
       while (tail != Nil) {
