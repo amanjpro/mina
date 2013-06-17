@@ -84,24 +84,23 @@ class HPEFinalizer(val hpe: HPE) extends PluginComponent
                             nbody)))
                       case _ => x
                     }
-//                    println(nb + "  " + nbody)
-//                    nbody.foreach((x: Tree) => println(x.symbol.name + "  " + x.symbol.enclClass)
-//                    				+ " and... " + x.symbol)
-////                    nbody.foreach(println(_))
-//                    typeTree(r)
                   case None => x
                 }
-                val classes = tree :: classBank.getAllMorphs(x.tpe) 
-                val comp = digraph.getCompanion(stat.tpe)
-                comp match {
-                  case Nil => classes
-                  case x :: _ => 
-                     classes.contains(comp) match {
-	                   case true => classes
-	                   case _ => classes ++ comp
-	                 }
+                tree.symbol.isClass match {
+                  case true => 
+                    val classes = tree :: classBank.getAllMorphs(x.symbol.tpe)
+                    val comp = digraph.getCompanion(stat.tpe)
+                    comp match {
+                      case Nil => classes
+                      case x :: _ => 
+                        classes.contains(comp) match {
+	                      case true => classes
+	                      case _ => classes ++ comp
+	                    }
+                    }
+                  case false => List(tree)
                 }
-               
+                               
 
               case x => List(x)
             }

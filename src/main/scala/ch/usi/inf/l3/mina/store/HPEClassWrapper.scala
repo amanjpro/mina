@@ -13,21 +13,51 @@ private[mina] trait HPEClassWrapper {
   self: HPE with HPEEnvironmentWrapper =>
   import HPEClassWrapper.this.global._
 
+  class SpecializedClasses {
+    var set = Set.empty[ImplDef]
+    def add(v: ImplDef): Unit = {
+      set.filter(_.symbol.name.toString.toLowerCase ==
+        v.symbol.name.toString.toLowerCase).isEmpty match {
+        case true => set = set + (v)
+        case false =>
+          set = set.filter(_.symbol.name.toString.toLowerCase !=
+            v.symbol.name.toString.toLowerCase) + (v)
+      }
+    }
+
+    def +(v: ImplDef): SpecializedClasses = {
+      add(v)
+      this
+    }
+    def toList(): List[ImplDef] = set.toList
+  }
+
+  object SpecializedClasses {
+    def apply(vs: ImplDef*): SpecializedClasses = {
+      val sp = new SpecializedClasses
+      for (v <- vs) {
+        sp.add(v)
+      }
+      sp
+    }
+  }
   /*
    * ImplDef if a super class of both ClassDef (for classes) and ModuleDef 
    * for (objects)
    */
   class ClassRepr(val tpe: Type, private var classTree: ImplDef = null) {
-    private var specialized: Map[TermName, DefDef] = Map.empty 
-    def getNextMethod(base: TermName, ctargs: List[Name], values: List[Value]) = {
+    private var specialized: Map[TermName, DefDef] = Map.empty
+    def getNextMethod(base: TermName, ctargs: List[Name], ctvals: List[Value]) = {
+      val values = nullify(ctvals)
       var tail = values.toString.replaceAll("[\\[\\]]", "")
       tail = values.toString.replaceAll("[\\(\\)]", "")
       var avails = ctargs.toString.replaceAll("[\\[\\]]", "")
       avails = ctargs.toString.replaceAll("[\\(\\)]", "")
-      val name = base.toString + "_m$_i$_"  + tail + "_" + avails+ "_n$_a$"
+      val name = base.toString + "_m$_i$_" + tail + "$_$" + avails + "_n$_a$"
       newTermName(name)
     }
 
+    var isSpecialized = false
     def hasMember(name: TermName, t: Type): Boolean = {
       var flag = false
       if (hasClassTree) {
@@ -39,7 +69,7 @@ private[mina] trait HPEClassWrapper {
       }
       flag
     }
-    
+
     def printMembers() = println(classTree.impl.body)
 
     def getMemberTree(name: TermName, t: Type): Tree = {
@@ -96,15 +126,15 @@ private[mina] trait HPEClassWrapper {
     }
 
     def addSpecialized(name: Name, ctargs: List[Name], args: List[Value], method: DefDef) = {
-      specialized = specialized + (getNextMethod(name, ctargs, nullify(args)) -> method)
+      specialized = specialized + (getNextMethod(name, ctargs, args) -> method)
     }
 
     def getSpecialized(name: Name, ctargs: List[Name], args: List[Value]): DefDef = {
-      specialized(getNextMethod(name, ctargs, nullify(args)))
+      specialized(getNextMethod(name, ctargs, args))
     }
 
     def getSpecializedOption(name: Name, ctargs: List[Name], args: List[Value]): Option[DefDef] = {
-      specialized.get(getNextMethod(name, ctargs, nullify(args)))
+      specialized.get(getNextMethod(name, ctargs, args))
     }
 
     def hasSpecialized(name: Name, ctargs: List[Name], args: List[Value]): Boolean = {
@@ -117,13 +147,10 @@ private[mina] trait HPEClassWrapper {
     override def toString(): String = tpe.toString
   }
 
-  
   class ClassBank {
-    private var nextClassID = 0
-    
-    
-    private var speciazlized: Map[(Type, List[Value]), ClassRepr] = Map.empty
-    private var allMorphs: Map[Type, List[ImplDef]] = Map.empty
+
+    private var speciazlized: Map[Name, ClassRepr] = Map.empty
+    private var allMorphs: Map[Type, SpecializedClasses] = Map.empty
 
     private def nullify(args: List[Value]): List[Value] = {
       var temp: List[Value] = Nil
@@ -135,35 +162,50 @@ private[mina] trait HPEClassWrapper {
       }
       temp.reverse
     }
-    
+
     def getAllMorphs(tpe: Type): List[ImplDef] = {
-      allMorphs.get(tpe) match {
-        case Some(classes) => classes
-        case _ => Nil
+      digraph.getClassRepr(tpe) match {
+        case None => Nil
+        case Some(clazz) =>
+          if (clazz.isSpecialized) Nil
+          else
+            allMorphs.get(tpe) match {
+              case Some(classes) => classes.toList
+              case _ => Nil
+            }
       }
-    } 
-
-    def getNextClassName(base: TermName): TermName = {
-      val newName = base + "_m$_i$_" + nextClassID + "_n$_a$"
-      nextClassID = nextClassID + 1
-      newTermName(newName)
     }
 
-    def add(tpe: Type, args: List[Value], clazz: ClassRepr) = {
-      
-      speciazlized = speciazlized + ((tpe, nullify(args)) -> clazz)
+    def getNextClassName(base: TypeName, ctargs: List[Name],
+      ctvals: List[Value]): TypeName = {
+      val vals = nullify(ctvals)
+      var tail = vals.toString.replaceAll("[\\[\\]]", "")
+      tail = vals.toString.replaceAll("[\\(\\)]", "")
+      var avails = ctargs.toString.replaceAll("[\\[\\]]", "")
+      avails = ctargs.toString.replaceAll("[\\(\\)]", "")
+      val newName = base + "_m$_i$_" + tail + "$_$" + avails + "_n$_a$"
+      newTypeName(newName)
     }
 
-    def get(tpe: Type, args: List[Value]): ClassRepr = {
-      speciazlized((tpe, nullify(args)))
+    def add(base: TypeName, tpe: Type, ctargs: List[Name], ctvals: List[Value], clazz: ClassRepr) = {
+
+      speciazlized = speciazlized + (getNextClassName(base, ctargs, ctvals) -> clazz)
+      allMorphs = allMorphs.get(tpe) match {
+        case None => allMorphs + (tpe -> SpecializedClasses(clazz.tree))
+        case Some(l) => allMorphs + (tpe -> (l + clazz.tree))
+      }
     }
 
-    def getOption(tpe: Type, args: List[Value]): Option[ClassRepr] = {
-      speciazlized.get((tpe, nullify(args)))
+    def get(base: TypeName, ctargs: List[Name], ctvals: List[Value]): ClassRepr = {
+      speciazlized(getNextClassName(base, ctargs, ctvals))
     }
 
-    def has(tpe: Type, args: List[Value]): Boolean = {
-      getOption(tpe, args) match {
+    def getOption(base: TypeName, ctargs: List[Name], ctvals: List[Value]): Option[ClassRepr] = {
+      speciazlized.get(getNextClassName(base, ctargs, ctvals))
+    }
+
+    def has(base: TypeName, ctargs: List[Name], ctvals: List[Value]): Boolean = {
+      getOption(base, ctargs, ctvals) match {
         case Some(x) => true
         case None => false
       }
@@ -172,7 +214,7 @@ private[mina] trait HPEClassWrapper {
 
   class ClassDigraph {
     type C = ClassRepr
-    
+
     private var companionMap: Map[Type, ClassRepr] = Map.empty
     private var index = 0
     private var nodes = Map.empty[C, Int]
@@ -195,32 +237,19 @@ private[mina] trait HPEClassWrapper {
       companionMap = companionMap + (tpe -> module)
     }
     def findCompanionModule(clazz: Symbol): Option[C] = {
-      if(clazz.isModule) {
+      if (clazz.isModule) {
         getClassRepr(clazz.tpe)
       } else {
         val mod = clazz.companionModule
-        if(mod != NoSymbol) {
+        if (mod != NoSymbol) {
           getClassRepr(mod.tpe)
-        }
-        else {
+        } else {
           getCompanionRepr(clazz.tpe) match {
             case x :: Nil => Some(x)
             case _ => None
           }
         }
       }
-//      var r: Option[C] = None
-//      var tail = nodes.keys.toList
-//      while (tail != Nil) {
-//        val clazz = tail.head
-//        if (clazz.hasClassTree &&
-//          clazz.tree.name.toString ==  &&
-//          clazz.tree.symbol.isModule) {
-//          r = Some(clazz)
-//        }
-//        tail = tail.tail
-//      }
-//      r
     }
 
     def addClass(clazz: C) = {
@@ -252,23 +281,26 @@ private[mina] trait HPEClassWrapper {
         case Some(index) =>
           edges(index) match {
             case Nil => Nil
-          	case cs => cs.map(reversed(_))
+            case cs => cs.map(reversed(_))
           }
         case None => Nil
       }
     }
 
     def getClassRepr(tpe: Type): Option[ClassRepr] = {
-      val temp = new ClassRepr(tpe)
-      nodes.get(temp) match {
-        case None => None
-        case Some(index) =>
-          val clazz = reversed(index)
-          clazz.hasClassTree match {
-            case true => Some(clazz)
-            case _ => None
-          }
+      if (tpe == null) None
+      else {
+        val temp = new ClassRepr(tpe)
+        nodes.get(temp) match {
+          case None => None
+          case Some(index) =>
+            val clazz = reversed(index)
+            clazz.hasClassTree match {
+              case true => Some(clazz)
+              case _ => None
+            }
 
+        }
       }
     }
 
