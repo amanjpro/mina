@@ -116,9 +116,6 @@ class HPEFinalizer(val hpe: HPE) extends PluginComponent
           typeTree(newpkg)
         case y => super.transform(y)
       }
-      //      println(tree)
-      //      println(" ----- ")
-            println(t)
       t
       //      tree
     }

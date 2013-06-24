@@ -20,7 +20,7 @@ var helpf = false
 var doc = false
 
 val scalaVersion = "2.10"
-val minaVersion = s"${scalaVersion}-1.0"
+val minaVersion = s"${scalaVersion}-1.0-beta"
 val sp = File.separator
 // The plugin jar file
 val mina = s"target${sp}scala-${scalaVersion}${sp}mina_${minaVersion}.jar"

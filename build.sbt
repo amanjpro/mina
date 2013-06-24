@@ -1,8 +1,8 @@
 name := "mina"
 
-version := "1.0"
+version := "1.0-beta"
 
-scalaVersion := "2.10.1"
+scalaVersion := "2.10.2"
 
 libraryDependencies <+= scalaVersion("org.scala-lang" % "scala-compiler" % _ )
 

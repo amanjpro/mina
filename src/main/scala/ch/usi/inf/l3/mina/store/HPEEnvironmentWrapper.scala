@@ -13,17 +13,17 @@ trait HPEEnvironmentWrapper {
   import self.global._
 
   // ---------------------- Environment ---------------------------------------
-  
+
   class Environment private (private val location: Map[Symbol, Int],
     private val store: Map[Int, Value],
     private val loc: Int) {
 
-    def this() {
+    private def this() {
       this(Map.empty, Map.empty, -1)
     }
 
     def getValue(s: Symbol): Value = {
-      if(s == null || s == NoSymbol) 
+      if (s == null || s == NoSymbol)
         throw new HPEError(s"Symbol should not be null or NoSymbol ${s}")
       location.get(s) match {
         case None => Bottom
@@ -31,11 +31,10 @@ trait HPEEnvironmentWrapper {
       }
     }
 
-
     def addValues(valvars: List[(Symbol, Value)]): Environment = {
       var env = this
       var tail = valvars
-      while(tail != Nil){
+      while (tail != Nil) {
         val (vr, vl) = tail.head
         env = env.addValue(vr, vl)
         tail = tail.tail
@@ -43,25 +42,25 @@ trait HPEEnvironmentWrapper {
       env
     }
     def updateValue(s: Symbol, value: Value): Environment = {
-      if(s == null || s == NoSymbol) 
+      if (s == null || s == NoSymbol)
         throw new HPEError(s"Symbol should not be null or NoSymbol ${s}")
       location.get(s) match {
         case None =>
           addValue(s, value)
         case Some(l) =>
-          val old = store(l) 
+          val old = store(l)
           old match {
-            case Bottom | _ if(old.tpe == value.tpe) =>
+            case Bottom | _ if (old.tpe == value.tpe) =>
               val s = store + (l -> value)
               new Environment(location, s, l)
             case _ => throw new HPEError(s"Once you make a variable, CT, " +
-            		"Abstract or Top you may not change it ${v}")
+              "Abstract or Top you may not change it ${v}")
           }
-          
+
       }
     }
     def addValue(s: Symbol, value: Value): Environment = {
-      if(s == null || s == NoSymbol) 
+      if (s == null || s == NoSymbol)
         throw new HPEError(s"Symbol should not be null or NoSymbol ${s}")
       val l = loc + 1
       val m = location + (s -> l) //location + (s -> l)
@@ -70,25 +69,24 @@ trait HPEEnvironmentWrapper {
     }
     private def makeConsistent(x: Environment, y: Environment): Environment = {
       var r = this
-      for((t, l) <- x.location){
-        if(x.getValue(t) == Top) r = r.addValue(t, Top)
-        else {
-          val vx = x.getValue(t)
-          val vy = y.getValue(t)
-          if(vx == vy) r.addValue(t, vx)
-          else if(vy == Top) r.addValue(t, Top)
-          else r.addValue(t, Bottom)
-        }
+      for ((t, l) <- x.location) {
+
+        val vx = x.getValue(t)
+        val vy = y.getValue(t)
+        if (vx == vy) r.addValue(t, vx)
+        else if (vy == Top || vx == Top) r.addValue(t, Top)
+        else r.remove(t)
+
       }
       r
-    } 
-    
+    }
+
     def makeConsistent(envs: List[Environment]): Environment = {
       envs match {
-        case Nil => new Environment
+        case Nil => Environment.empty
         case x :: Nil => x
         case x :: y :: Nil =>
-          if(x.location.size >= y.location.size) makeConsistent(x, y)
+          if (x.location.size >= y.location.size) makeConsistent(x, y)
           else makeConsistent(y, x)
         case x :: y :: xs =>
           val x1 = makeConsistent(x :: y :: Nil)
@@ -134,11 +132,11 @@ trait HPEEnvironmentWrapper {
       val location2 = location - (s)
       new Environment(location2, store, loc)
     }
-    
+
     def remove(vars: List[Symbol]): Environment = {
       var tail = vars
       var tempStore = this
-      while(tail != Nil) {
+      while (tail != Nil) {
         val head = tail.head
         tail = tail.tail
         tempStore = remove(head)
@@ -166,10 +164,10 @@ trait HPEEnvironmentWrapper {
         case _ => false
       }
     }
-    
+
     override def toString: String = location.toString + "\n" + store.toString
   }
-  
+
   object Environment {
     def empty: Environment = { new Environment }
     def apply(varval: List[(Symbol, Value)]): Environment = {
@@ -197,6 +195,7 @@ trait HPEEnvironmentWrapper {
     protected val RT = 2
     protected val TOP = 3
     def value: Option[HPEAny];
+    val isCT = false
     def tpe: Int;
   }
 
@@ -214,6 +213,7 @@ trait HPEEnvironmentWrapper {
     override def value: Option[HPEAny] = Some(v)
     override def toString: String = value.get.toString
     def toTree = v.tree
+    override val isCT = true 
     def tpe: Int = CT
   }
 
@@ -224,13 +224,13 @@ trait HPEEnvironmentWrapper {
   }
 
   // ---------------------- Simulating Runtime Object  -----------------------
-  
+
   trait HPEAny {
     val tree: Tree;
     val tpe: Type;
   }
   case class HPEObject(val tree: Tree, val tpe: Type,
-		  val store: Environment) extends HPEAny {
+    val store: Environment) extends HPEAny {
     override def equals(that: Any): Boolean = {
       that match {
         case HPEObject(_, `tpe`, `store`) => true
@@ -238,7 +238,7 @@ trait HPEEnvironmentWrapper {
       }
     }
     override def toString: String = tree.toString.replaceAll("[\\[\\]]", "")
-    override def hashCode = 71 * 5  + tpe.## + store.##
+    override def hashCode = 71 * 5 + tpe.## + store.##
   }
 
   case class HPELiteral(override val tree: Literal,
@@ -253,7 +253,7 @@ trait HPEEnvironmentWrapper {
     override def toString: String = tree.value.toString
     override def hashCode = 71 * 5 + tree.value.value.## + tpe.##
   }
-  
+
   case class HPETree(val tree: Tree) extends HPEAny {
     val tpe: Type = tree.tpe
   }

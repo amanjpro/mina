@@ -22,7 +22,7 @@ class HPE(val global: Global) extends Plugin
   
   import global._
 
-  var env = new Environment
+  var env = Environment.empty
   var closed = false
   val digraph = new ClassDigraph
   val classBank = new ClassBank
