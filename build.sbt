@@ -1,3 +1,7 @@
+organization := "ch.usi.inf.l3"
+
+licenses := ("BSD 3-Clause", new java.net.URL("http://opensource.org/licenses/BSD-3-Clause")) :: Nil
+
 name := "mina"
 
 version := "1.0-beta"

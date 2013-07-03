@@ -74,6 +74,8 @@ class HPEFinalizer(val hpe: HPE) extends PluginComponent
                    
                     (added, x) match {
                       case (true, y: ModuleDef) =>
+                        
+                        
                         typeTree(treeCopy.ModuleDef(y, y.mods, y.name,
                           treeCopy.Template(y.impl, y.impl.parents, y.impl.self,
                             nbody)))

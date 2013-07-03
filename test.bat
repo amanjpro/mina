@@ -1,6 +1,8 @@
-#!/bin/sh
-exec scala -save -feature "$0" "$@"
-!#
+::#!
+@echo off
+call scala -save -feature %0 %*
+goto :eof
+::!#
 
 /*
  *  Copyright (c) <2013>, Amanj Sherwany <http://www.amanj.me>
