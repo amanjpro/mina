@@ -51,6 +51,7 @@ class B{
   def m(aino: Int, bino: Int) = {
     val x = 3
     aino + bino
+    x
   }
 }
 //

@@ -658,15 +658,21 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
     }
 
     private def changeOwner(tree: Tree, oldOwner: Symbol, newOwner: Symbol): Unit = {
+      var list: Map[Symbol, Symbol] = Map.empty
       tree.foreach {
         (x: Tree) =>
           {
             if (x.symbol != null && x.symbol != NoSymbol
               && x.symbol.owner == oldOwner) {
-              val ts = x.symbol
-              val ns = x.symbol.cloneSymbol(newOwner)
-              x.symbol = ns
-              changeOwner(x, ts, ns)
+              x match {
+                case ident: Ident => ident.symbol = list(ident.symbol)
+                case _ =>
+                  val ts = x.symbol
+                  val ns = x.symbol.cloneSymbol(newOwner)
+                  x.symbol = ns
+                  list = list + (ts -> ns) 
+                  changeOwner(x, ts, ns)
+              }
             }
           }
       }
@@ -736,6 +742,8 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
           }
 
           changeOwner(mbody, method.symbol, paramSyms)
+          
+          changeOwner(mbody, method.symbol, symb)
 
           val tbody = localTyper.typedPos(symb.pos)(mbody)
 
