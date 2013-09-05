@@ -147,6 +147,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
          *         			List(Literal(Constant(3))))
          */
 
+          
         case cnstrct @ Apply(Select(New(tpt), nme.CONSTRUCTOR), args) =>
           digraph.getClassRepr(tpt.tpe) match {
             case Some(clazz) =>
@@ -699,7 +700,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
       }
     }
 
-    private def getSpecizlizedMethod(clazz: ClassRepr,
+    private def getSpecializedMethod(clazz: ClassRepr,
       method: DefDef, args: List[Value],
       ctnames: List[Name], env: Environment, ret: Type): (DefDef, Environment) = {
       clazz.getSpecializedOption(method.symbol.name, ctnames, args) match {
@@ -973,7 +974,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
 
                 val module = getCompanionObject(rcvclass)
 
-                val (specialized, renv) = getSpecizlizedMethod(module, mtree, pvals, ctnames, menv, apply.tpe)
+                val (specialized, renv) = getSpecializedMethod(module, mtree, pvals, ctnames, menv, apply.tpe)
                 val sapply = Apply(REF(module.tree.symbol) DOT specialized.symbol.name, rargs).setSymbol(specialized.symbol)
                 (typeTree(sapply), Top, env3)
               }
@@ -981,7 +982,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
               if (hasCT(pvals)) {
                 val rargs = getRuntimeArgs(args, pvals)
                 val mname = rcvclass.getNextMethod(mtree.symbol.name, ctnames, ctvals)
-                val (specialized, envr) = getSpecizlizedMethod(rcvclass, mtree, pvals, ctnames, menv, apply.tpe)
+                val (specialized, envr) = getSpecializedMethod(rcvclass, mtree, pvals, ctnames, menv, apply.tpe)
                 val sapply = Apply(rcvr DOT specialized.symbol.name, rargs).setSymbol(specialized.symbol)
                 val tapply = typeTree(sapply)
                 (tapply, Top, envr)
@@ -997,7 +998,7 @@ class HPESpecializer(val hpe: HPE) extends PluginComponent
                 val clazzes = rcvclass :: digraph.getSubclasses(rcvclass)
                 val mname = rcvclass.getNextMethod(mtree.symbol.name, ctnames, ctvals)
                 for (c <- clazzes) {
-                  val (specialized, envr) = getSpecizlizedMethod(c, mtree, pvals, ctnames, menv, apply.tpe)
+                  val (specialized, envr) = getSpecializedMethod(c, mtree, pvals, ctnames, menv, apply.tpe)
                 }
                 val mthd = rcvclass.getSpecialized(mname, ctnames, pvals)
                 val tapply = typeTree(Apply(rcvr DOT mname, rargs).setSymbol(mthd.symbol))

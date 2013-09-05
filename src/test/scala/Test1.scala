@@ -29,6 +29,9 @@ object Test1{
     
     val bb = CT(new B)
     println(bb.m(2, CT(3)) + bb.m(CT(3), 2))
+    
+    val ddd = new B
+    println(ddd.m(CT(444), 2))
   }
 }
 
@@ -45,7 +48,10 @@ class Test1 {
 
 
 class B{
-  def m(aino: Int, bino: Int) = aino + bino
+  def m(aino: Int, bino: Int) = {
+    val x = 3
+    aino + bino
+  }
 }
 //
 //object B {}
